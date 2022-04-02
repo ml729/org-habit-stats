@@ -22,6 +22,9 @@
 
 ;; User can choose which stats to compute
 (defvar org-habit-stats-list)
+(defvar org-habit-stats-graph-drawer-name)
+
+(setq org-habit-stats-graph-drawer-name "Graph")
 
 (defun org-habit-stats-dates-to-binary (tasks)
   "Return binary version of TASKS from newest to oldest, where
@@ -121,19 +124,78 @@ Assumes the dates logged for the habit are in order, newest to oldest."
 
 
 ;; Create org habit stats display buffer
-;; (defun org-habit-stats-create-buffer ()
-;;   (interactive)
-;;   (switch-to-buffer (generate-new-buffer "*Org Habit Stats*"))
-;;   (let* ((data-file (make-temp-file "org-habit-stats-score-monthly-data"))
-;;          ;;insert
-;;          (with-temp-buffer (data-file)
-;;                            (insert "hi 1")
-;;                            (insert "bye 2")
-;;                            (insert " 2")
-;;          )
+(defun org-habit-stats-create-buffer ()
+  (interactive)
+  (let* ((gnuplot-buf (generate-new-buffer "*Org Habit Stats*"))
+         (data-file (make-temp-file "org-habit-stats-score-monthly-data"))
+         (output-file (make-temp-file "org-habit-stats-graph-output")))
+         ;;insert
+         (with-temp-file data-file
+                           (insert "1 1\n")
+                           (insert "2 4\n")
+                           (insert "3 9\n"))
+         (with-current-buffer gnuplot-buf
+           (gnuplot-mode)
+           (insert "set term dumb\n")
+           (insert (format "set output '%s'\n" output-file))
+           (insert (format "plot '%s' w dots\n" data-file))
+           (save-window-excursion (gnuplot-send-buffer-to-gnuplot))
+           )
+         ;; (switch-to-buffer gnuplot-buf)
 
-;;     )
-;;   )
+    ))
+(defun org-habit-stats-find-drawer-bounds (drawer-name)
+  "Finds and returns the start and end positions of the first drawer of the
+   current heading with name DRAWER-NAME."
+  (let* ((heading-pos (org-back-to-heading-or-point-min t))
+         (graph-beg-pos (progn
+                          (search-forward-regexp (format ":%s:" drawer-name))
+                          (match-beginning 0)))
+         (graph-end-pos (search-forward ":END:"))
+         (graph-beg-pos-verify (progn
+                                 (search-forward-regexp ":words:")
+                                 (match-beginning 0)))
+         (heading-pos-verify (org-back-to-heading-or-point-min t)))
+    (if (and (= heading-pos heading-pos-verify)
+             (= graph-beg-pos graph-beg-pos-verify))
+        '(graph-beg-pos graph-end-pos))))
+(defun org-habit-stats-remove-drawer (drawer-name)
+"Remove drawer with name DRAWER-NAME from task at point if it exists."
+;; figure out how to search for whitespace
+(let* ((heading-pos (org-back-to-heading-or-point-min t))
+       (graph-end-pos (search-forward-regexp (format ":%s:[whitespace]:END:" drawer-name) nil nil))
+       (graph-beg-pos (match-beginning 0))
+       (new-heading-pos (org-back-to-heading-or-point-min t)))
+  (if (and graph-end-pos (= (heading-pos) (new-heading-pos)))
+      (delete-region (- graph-beg-pos (length drawer-name)) graph-end-pos))))
+(defun org-habit-stats-insert-drawer (drawer-name drawer-contents)
+  (org-with-wide-buffer
+   ;;Set point to the position where the drawer should be inserted.
+   ;; (org-habit-stats-remove-drawer (drawer-name))
+   (if (or (not (featurep 'org-inlinetask)) (org-inlinetask-in-task-p))
+       (org-back-to-heading-or-point-min t)
+     (org-with-limited-levels (org-back-to-heading-or-point-min t)))
+   (if (org-before-first-heading-p)
+       (while (and (org-at-comment-p) (bolp)) (forward-line))
+     (progn
+       (forward-line)
+       (when (looking-at-p org-planning-line-re) (forward-line))))
+
+   (when (and (bolp) (> (point) (point-min))) (backward-char))
+   (let ((begin (if (bobp) (point) (1+ (point))))
+         (inhibit-read-only t))
+     (unless (bobp) (insert "\n"))
+     (insert (format ":%s:\n%s:END:" drawer-name drawer-contents))
+     (org-flag-region (line-end-position 0) (point) t 'outline)
+     (when (or (eobp) (= begin (point-min))) (insert "\n"))
+     (org-indent-region begin (point))
+     (org-hide-drawer-toggle)
+     )))
+(defun org-habit-stats-insert-drawer-3 ()
+  (interactive)
+  (org-habit-stats-insert-drawer "hi" "1\n1\n1\n1\n")
+  )
+
 
 (provide 'org-habit-stats)
 ;;; org-habit-stats.el ends here
