@@ -37,16 +37,51 @@ Assumes the dates logged for the habit are in order, newest to oldest."
              (diff (- (nth 0 tasks) next)))
         (while (> diff 1)
           (push 0 bin-hist)
-          (setq diff (- diff 1))))
-      )
+          (setq diff (- diff 1)))))
     (if (= (length tasks) 1) (push 1 bin-hist))
     bin-hist))
 
 ;; Stats
 (defun org-habit-stats-streak (history)
+  "Returns the current streak."
   (if (= (pop history) 1)
       (1+ (org-habit-stats-streak history))
     0))
+(defun org-habit-stats--record-streak-full (history)
+  "Returns (a b) where a is the record streak,
+   b is the day the record streak occurred."
+  (let ((record-streak 0)
+        (record-day 0)
+        (curr-streak 0)
+        (curr-streak-start 0)
+        (curr-day 0))
+    (while history
+      (if (= (pop history) 1)
+          (progn
+            (when (= curr-streak 0)
+              (setq curr-streak-start curr-day))
+            (setq curr-streak (1+ curr-streak)))
+        (setq curr-streak 0))
+      (when (> curr-streak record-streak)
+        (setq record-streak curr-streak)
+        (setq record-day curr-streak-start))
+      (setq curr-day (1+ curr-day)))
+    (cons record-streak (org-date-to-gregorian (- (org-today) record-day)))))
+
+(defun single-whitespace-only (s)
+  (string-join
+   (seq-filter (lambda (x) (if (> (length x) 0) t))
+               (split-string s " "))
+   " "))
+
+(defun org-habit-stats-record-streak-format (history)
+  (let* ((record-data (org-habit-stats--record-streak-full history))
+         (record-streak (car record-data))
+         (record-day (cdr record-data)))
+    (concat (number-to-string record-streak)
+            ", achieved on "
+            (single-whitespace-only (org-agenda-format-date-aligned record-day)))))
+
 (defun org-habit-stats-N-day-total (history N)
   (if (and (> N 0) history)
       (if (= (pop history) 1)
@@ -98,6 +133,12 @@ Assumes the dates logged for the habit are in order, newest to oldest."
                       (number-to-string
                        (org-habit-stats-365-day-total
                         history))))))
+
+(defun number-to-string-maybe (x)
+  (cond ((integerp x) (format "%d" x))
+        ((floatp x) (format "%.5f" x))
+        (t x)))
+
 (defun org-habit-stats-update-score-2 ()
   "Update score, streak, monthly, and yearly properties of a habit task
    with the corresponding statistics, and update graph of habit score."
@@ -108,13 +149,13 @@ Assumes the dates logged for the habit are in order, newest to oldest."
       (mapcar (lambda (prop-func)
                 ;; (print (cdr prop-func))
                 (org-set-property (car prop-func)
-                                  (number-to-string
-                                   (funcall (cdr prop-func) history)))
-                )
+                                  (number-to-string-maybe
+                                   (funcall (cdr prop-func) history))))
               '(("SCORE" . org-habit-stats-exp-smoothing-list-score)
-                ("STREAK" . org-habit-stats-streak)
+                ("CURRENT_STREAK" . org-habit-stats-streak)
                 ("MONTHLY" . org-habit-stats-30-day-total)
-                ("YEARLY" . org-habit-stats-365-day-total)))
+                ("YEARLY" . org-habit-stats-365-day-total)
+                ("RECORD_STREAK" . org-habit-stats-record-streak-format)))
       (org-habit-stats-update-graph history))))
 
 ;; (add-hook 'org-after-todo-state-change-hook 'org-habit-stats-update-score)
@@ -146,14 +187,14 @@ Assumes the dates logged for the habit are in order, newest to oldest."
       (insert (format "set output '%s'\n" output-file))
       (insert (format "plot '%s' w dots\n" data-file))
       (save-window-excursion (gnuplot-send-buffer-to-gnuplot)))
-
-      ;; read from output file
-    (let ((graph-content (concat "#+BEGIN_SRC\n"(substring (org-file-contents output-file) 1)
+    ;; read from output file
+    (let ((graph-content (concat "#+BEGIN_SRC\n"
+                                 (substring (org-file-contents output-file) 1)
                                  "\n#+END_SRC\n")))
             (org-habit-stats-insert-drawer org-habit-stats-graph-drawer-name graph-content))
       (delete-file data-file)
       (delete-file output-file)
-      ))
+      (kill-buffer gnuplot-buf)))
 (defun org-habit-stats--find-drawer-bounds (drawer-name)
   "Finds and returns the start and end positions of the first drawer of the
    current heading with name DRAWER-NAME."
@@ -172,18 +213,6 @@ Assumes the dates logged for the habit are in order, newest to oldest."
       (when (and (= heading-pos heading-pos-verify)
                  (= graph-beg-pos graph-beg-pos-verify))
         (cons graph-beg-pos graph-end-pos))))))
-(defun org-drawer-test ()
-  (interactive)
-  (print (org-back-to-heading)))
-;; (defun org-habit-stats-remove-drawer (drawer-name)
-;; "Remove drawer with name DRAWER-NAME from task at point if it exists."
-;; ;; figure out how to search for whitespace
-;; (let* ((heading-pos (org-back-to-heading-or-point-min t))
-;;        (graph-end-pos (search-forward-regexp (format ":%s:[whitespace]:END:" drawer-name) nil nil))
-;;        (graph-beg-pos (match-beginning 0))
-;;        (new-heading-pos (org-back-to-heading-or-point-min t)))
-;;   (if (and graph-end-pos (= (heading-pos) (new-heading-pos)))
-;;       (delete-region (- graph-beg-pos (length drawer-name)) graph-end-pos))))
 (defun org-habit-stats--remove-drawer (drawer-name)
   (let ((bounds (org-habit-stats--find-drawer-bounds drawer-name)))
     (when bounds
@@ -219,14 +248,7 @@ Assumes the dates logged for the habit are in order, newest to oldest."
      (when (or (eobp) (= begin (point-min))) (insert "\n"))
      (org-indent-region begin (point))
      (org-hide-drawer-toggle))))
-(defun org-habit-stats-insert-drawer-3 ()
-  (interactive)
-  (org-habit-stats-insert-drawer "hi" "1\n1\n1\n1\n")
-  )
 
-(defun org-stats-prop-check ()
-    (interactive)
-  (print (looking-at-p org-property-drawer-re)))
 
 (provide 'org-habit-stats)
 ;;; org-habit-stats.el ends here
