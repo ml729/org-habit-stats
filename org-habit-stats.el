@@ -22,9 +22,9 @@
 
 ;; User can choose which stats to compute
 (defvar org-habit-stats-list)
-(defvar org-habit-stats-graph-drawer-name)
+;; (defvar org-habit-stats-graph-drawer-name)
 
-(setq org-habit-stats-graph-drawer-name "Graph")
+(setq org-habit-stats-graph-drawer-name "GRAPH")
 
 (defun org-habit-stats-dates-to-binary (tasks)
   "Return binary version of TASKS from newest to oldest, where
@@ -99,6 +99,8 @@ Assumes the dates logged for the habit are in order, newest to oldest."
                        (org-habit-stats-365-day-total
                         history))))))
 (defun org-habit-stats-update-score-2 ()
+  "Update score, streak, monthly, and yearly properties of a habit task
+   with the corresponding statistics, and update graph of habit score."
   (interactive)
   (when (org-is-habit-p (point))
     (let ((history (org-habit-stats-dates-to-binary
@@ -113,7 +115,7 @@ Assumes the dates logged for the habit are in order, newest to oldest."
                 ("STREAK" . org-habit-stats-streak)
                 ("MONTHLY" . org-habit-stats-30-day-total)
                 ("YEARLY" . org-habit-stats-365-day-total)))
-      )))
+      (org-habit-stats-update-graph history))))
 
 ;; (add-hook 'org-after-todo-state-change-hook 'org-habit-stats-update-score)
 ;; (advice-add 'org-todo :after (lambda (x) (org-habit-stats-update-score-2)))
@@ -124,54 +126,81 @@ Assumes the dates logged for the habit are in order, newest to oldest."
 
 
 ;; Create org habit stats display buffer
-(defun org-habit-stats-create-buffer ()
+(defun org-habit-stats-update-graph (history)
   (interactive)
   (let* ((gnuplot-buf (generate-new-buffer "*Org Habit Stats*"))
          (data-file (make-temp-file "org-habit-stats-score-monthly-data"))
          (output-file (make-temp-file "org-habit-stats-graph-output")))
-         ;;insert
-         (with-temp-file data-file
-                           (insert "1 1\n")
-                           (insert "2 4\n")
-                           (insert "3 9\n"))
-         (with-current-buffer gnuplot-buf
-           (gnuplot-mode)
-           (insert "set term dumb\n")
-           (insert (format "set output '%s'\n" output-file))
-           (insert (format "plot '%s' w dots\n" data-file))
-           (save-window-excursion (gnuplot-send-buffer-to-gnuplot))
-           )
-         ;; (switch-to-buffer gnuplot-buf)
+    ;;insert
+    (with-temp-file data-file
+      (insert
+       (let ((enum 0))
+         (string-join
+          (mapcar (lambda (x) (progn (setq enum (1+ enum)) (format "%d %d" enum x)))
+                    (reverse (org-habit-stats-exp-smoothing-list--full history)))
+          "\n")))
+      (insert "\n"))
+    (with-current-buffer gnuplot-buf
+      (gnuplot-mode)
+      (insert "set term dumb\n")
+      (insert (format "set output '%s'\n" output-file))
+      (insert (format "plot '%s' w dots\n" data-file))
+      (save-window-excursion (gnuplot-send-buffer-to-gnuplot)))
 
-    ))
-(defun org-habit-stats-find-drawer-bounds (drawer-name)
+      ;; read from output file
+    (let ((graph-content (concat "#+BEGIN_SRC\n"(substring (org-file-contents output-file) 1)
+                                 "\n#+END_SRC\n")))
+            (org-habit-stats-insert-drawer org-habit-stats-graph-drawer-name graph-content))
+      (delete-file data-file)
+      (delete-file output-file)
+      ))
+(defun org-habit-stats--find-drawer-bounds (drawer-name)
   "Finds and returns the start and end positions of the first drawer of the
    current heading with name DRAWER-NAME."
-  (let* ((heading-pos (org-back-to-heading-or-point-min t))
+  (save-excursion
+  (let* ((heading-pos (progn (org-back-to-heading) (point)))
          (graph-beg-pos (progn
-                          (search-forward-regexp (format ":%s:" drawer-name))
+                          (search-forward-regexp (format ":%s:" drawer-name) nil t)
                           (match-beginning 0)))
          (graph-end-pos (search-forward ":END:"))
          (graph-beg-pos-verify (progn
-                                 (search-forward-regexp ":words:")
+                                 (search-backward-regexp ":GRAPH:" nil t)
                                  (match-beginning 0)))
-         (heading-pos-verify (org-back-to-heading-or-point-min t)))
-    (if (and (= heading-pos heading-pos-verify)
-             (= graph-beg-pos graph-beg-pos-verify))
-        '(graph-beg-pos graph-end-pos))))
-(defun org-habit-stats-remove-drawer (drawer-name)
-"Remove drawer with name DRAWER-NAME from task at point if it exists."
-;; figure out how to search for whitespace
-(let* ((heading-pos (org-back-to-heading-or-point-min t))
-       (graph-end-pos (search-forward-regexp (format ":%s:[whitespace]:END:" drawer-name) nil nil))
-       (graph-beg-pos (match-beginning 0))
-       (new-heading-pos (org-back-to-heading-or-point-min t)))
-  (if (and graph-end-pos (= (heading-pos) (new-heading-pos)))
-      (delete-region (- graph-beg-pos (length drawer-name)) graph-end-pos))))
+         (heading-pos-verify (progn (org-back-to-heading) (point))))
+    (when (and heading-pos heading-pos-verify
+               graph-beg-pos graph-beg-pos-verify graph-end-pos)
+      (when (and (= heading-pos heading-pos-verify)
+                 (= graph-beg-pos graph-beg-pos-verify))
+        (cons graph-beg-pos graph-end-pos))))))
+(defun org-drawer-test ()
+  (interactive)
+  (print (org-back-to-heading)))
+;; (defun org-habit-stats-remove-drawer (drawer-name)
+;; "Remove drawer with name DRAWER-NAME from task at point if it exists."
+;; ;; figure out how to search for whitespace
+;; (let* ((heading-pos (org-back-to-heading-or-point-min t))
+;;        (graph-end-pos (search-forward-regexp (format ":%s:[whitespace]:END:" drawer-name) nil nil))
+;;        (graph-beg-pos (match-beginning 0))
+;;        (new-heading-pos (org-back-to-heading-or-point-min t)))
+;;   (if (and graph-end-pos (= (heading-pos) (new-heading-pos)))
+;;       (delete-region (- graph-beg-pos (length drawer-name)) graph-end-pos))))
+(defun org-habit-stats--remove-drawer (drawer-name)
+  (let ((bounds (org-habit-stats--find-drawer-bounds drawer-name)))
+    (when bounds
+      (delete-region (car bounds) (cdr bounds))
+      t)))
+
+(defun org-habit-stats--skip-property-drawer ()
+  (let* ((property-pos (search-forward-regexp ":PROPERTIES:" nil t)))
+         (when property-pos
+           (search-forward-regexp ":END:")
+           (forward-line))))
+
 (defun org-habit-stats-insert-drawer (drawer-name drawer-contents)
+  "Inserts drawer DRAWER-NAME with contents DRAWER-CONTENTS.
+   It is placed after the property drawer if it exists."
   (org-with-wide-buffer
-   ;;Set point to the position where the drawer should be inserted.
-   ;; (org-habit-stats-remove-drawer (drawer-name))
+   (org-habit-stats--remove-drawer drawer-name)
    (if (or (not (featurep 'org-inlinetask)) (org-inlinetask-in-task-p))
        (org-back-to-heading-or-point-min t)
      (org-with-limited-levels (org-back-to-heading-or-point-min t)))
@@ -179,8 +208,8 @@ Assumes the dates logged for the habit are in order, newest to oldest."
        (while (and (org-at-comment-p) (bolp)) (forward-line))
      (progn
        (forward-line)
-       (when (looking-at-p org-planning-line-re) (forward-line))))
-
+       (when (looking-at-p org-planning-line-re) (forward-line))
+       (org-habit-stats--skip-property-drawer)))
    (when (and (bolp) (> (point) (point-min))) (backward-char))
    (let ((begin (if (bobp) (point) (1+ (point))))
          (inhibit-read-only t))
@@ -189,13 +218,15 @@ Assumes the dates logged for the habit are in order, newest to oldest."
      (org-flag-region (line-end-position 0) (point) t 'outline)
      (when (or (eobp) (= begin (point-min))) (insert "\n"))
      (org-indent-region begin (point))
-     (org-hide-drawer-toggle)
-     )))
+     (org-hide-drawer-toggle))))
 (defun org-habit-stats-insert-drawer-3 ()
   (interactive)
   (org-habit-stats-insert-drawer "hi" "1\n1\n1\n1\n")
   )
 
+(defun org-stats-prop-check ()
+    (interactive)
+  (print (looking-at-p org-property-drawer-re)))
 
 (provide 'org-habit-stats)
 ;;; org-habit-stats.el ends here
