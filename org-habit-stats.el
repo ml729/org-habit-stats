@@ -19,12 +19,71 @@
 ;;; Code:
 
 (require 'org-habit)
+(require 'cl-lib)
 
 ;; User can choose which stats to compute
 (defvar org-habit-stats-list)
 ;; (defvar org-habit-stats-graph-drawer-name)
 
-(setq org-habit-stats-graph-drawer-name "GRAPH")
+(defcustom org-habit-stats-insert-graph-in-file t
+  "Whether or not to insert ascii graph of habit scores in file."
+  :group 'org-habit-stats
+  :type 'boolean)
+
+(defcustom org-habit-stats-graph-drawer-name "GRAPH"
+  "Name of drawer that stores habit graph."
+  :group 'org-habit-stats
+  :type 'string)
+
+(defconst org-habit-stats-buffer "*Org-Habit-Stats*"
+  "Name of the buffer used for displaying stats, calendar, and graphs.")
+
+(defconst org-habit-stats-calendar-buffer "*Org-Habit-Stats Calendar*"
+  "Name of the buffer used for the calendar.")
+
+(defvar org-habit-stats-chart-face-color-list '("red" "green" "blue"
+                                "cyan" "yellow" "purple")
+  "Colors to use for bars of habit bar graph. The original value of
+chart-face-color-list is unaffected.")
+
+(defvar org-habit-stats-current-habit-data nil
+  "Output from org-habit-parse-todo of currently viewed habit.")
+
+(defvar org-habit-stats-graph-width 70
+  "Width of x-axis of graph (in columns), not including origin.")
+
+(defvar org-habit-stats-graph-height 10
+  "Height of y-axis of graph (in line numbers), not including origin.")
+
+(defvar org-habit-stats-graph-left-margin 5
+  "Number of columns to the left of y-axis.")
+
+(defvar org-habit-stats-graph-current-offset 0
+  "How many bars to shift left when the bar graph is truncated.")
+
+(defvar org-habit-stats-view-order '(statistics graph calendar)
+  "Output from org-habit-parse-todo of currently viewed habit.")
+
+;;; Faces
+(defface org-habit-stats-graph-label
+  '((t (:inherit default)))
+  "Face for a habit graph's axis labels."
+  :group 'org-habit-stats)
+
+(defface org-habit-stats-graph-name
+  '((t (:weight bold)))
+  "Face for a habit graph's axis name."
+  :group 'org-habit-stats)
+
+(defface org-habit-stats-graph-title
+  '((t (:weight bold)))
+  "Face for a habit graph's title."
+  :group 'org-habit-stats)
+
+(defface org-habit-stats-calendar-completed
+  '((t (:background "#006800")))
+  "Face for days in the calendar where the habit was completed."
+  :group 'org-habit-stats)
 
 (defun org-habit-stats-dates-to-binary (tasks)
   "Return binary version of TASKS from newest to oldest, where
@@ -195,6 +254,7 @@ Assumes the dates logged for the habit are in order, newest to oldest."
       (delete-file data-file)
       (delete-file output-file)
       (kill-buffer gnuplot-buf)))
+
 (defun org-habit-stats--find-drawer-bounds (drawer-name)
   "Finds and returns the start and end positions of the first drawer of the
    current heading with name DRAWER-NAME."
@@ -248,6 +308,216 @@ Assumes the dates logged for the habit are in order, newest to oldest."
      (when (or (eobp) (= begin (point-min))) (insert "\n"))
      (org-indent-region begin (point))
      (org-hide-drawer-toggle))))
+
+;; mode
+(define-derived-mode org-habit-stats-mode special-mode "Org-Habit-Stats"
+  "A major mode for the org-habit-stats window.
+\\<org-habit-stats-mode-map>\\{org-habit-stats-mode-map}"
+  (setq buffer-read-only t
+        buffer-undo-list t
+        indent-tabs-mode nil)
+  (make-local-variable 'current-org-habit))
+(defvar org-habit-stats-mode-map
+  (let ((map (make-keymap)))
+    (suppress-keymap map)
+    (define-key map "q"   'org-habit-stats-exit)
+    )
+  "Keymap for `org-habit-stats-mode'.")
+;; creating the habit buffer
+(defun org-habit-stats--insert-divider ()
+    (insert (make-string (window-width) org-agenda-block-separator))
+    (insert (make-string 1 ?\n)))
+(defun org-habit-stats-create-habit-buffer (habit-info)
+  "Creates buffer displaying:
+   - Calendar where days habit is done are marked
+   - Graph of habit score or histogram of habit totals monthly/weekly
+   - Various habit statistics"
+  (let ((buff (current-buffer)))
+    (switch-to-buffer (get-buffer-create org-habit-stats-buffer))
+    (org-habit-stats-mode)
+    ;;; inject habit data
+    (insert
+     (propertize "Run a mile\n" 'face 'bold))
+    (insert "Score: 5\tCurrent Streak: 25\t Total Completions: 50\n")
+    (insert (make-string 1 ?\n))
+    (org-habit-stats--insert-divider)
+    (insert "Days Completed")
+    (insert (make-string 2 ?\n))
+    ;;; create calendar
+    (org-habit-stats-make-calendar-buffer habit-info)
+    (let ((cal-offset-for-overlay (1- (point))))
+      (insert (org-habit-stats-get-calendar-contents))
+      (org-habit-stats-apply-overlays (org-habit-stats-get-calendar-overlays)
+                                      cal-offset-for-overlay
+                                      (current-buffer)))
+    (insert (make-string 2 ?\n))
+    (org-habit-stats--insert-divider)
+    (insert "Graph")
+    (insert (make-string 2 ?\n))
+    ;;; create graph
+    (org-habit-stats-chart-bar-quickie-extended
+     'vertical
+     "Monthly Completions"
+     '("Jan" "Feb" "Mar" "Apr" "Jun" "asdf" "asdf" "asdf" "asdf" "asdf")
+     "Month"
+     '(20 10 30 28 27 26 26 26 26 26)
+     "Completions"
+     org-habit-stats-graph-width
+     org-habit-stats-graph-height
+     (line-number-at-pos)
+     org-habit-stats-graph-left-margin
+     'org-habit-stats-graph-title
+     'org-habit-stats-graph-name
+     'org-habit-stats-graph-label)))
+
+;;; Graph helpers
+
+(defclass org-habit-stats-chart-sequence ()
+  ((data :initarg :data
+         :initform nil)
+   (name :initarg :name
+         :initform "Data")
+   )
+  "Class used for all data in different charts, originally defined in charts.el as 'chart-sequence'.
+   Some earlier versions of Emacs the name of this class contains a typo ('chart-sequece') so we redefine it here under a new name.")
+;; (setq test-instance (make-instance 'chart-sequece))
+;; (oset test-instance lmao 1)
+;; (oref test-instance lmao)
+(defun org-habit-stats-chart-draw-title (c &optional align-left)
+  "Draw a title of chart. By default, centered. If ALIGN-LEFT, align-left."
+  (if align-left
+      (chart-display-label (oref c title) 'horizontal
+                           (- (oref c x-margin) 2)
+                           (oref c y-margin) (+ (length (oref c title))
+                                                (oref c y-margin))
+                           (oref c title-face))
+    (chart-display-label (oref c title) 'horizontal
+                         (- (oref c x-margin) 2)
+                         (oref c y-margin) (+ (oref c x-width)
+                                              (oref c y-margin))
+                         (oref c title-face))))
+
+(defun org-habit-stats-chart-draw (c &optional buff)
+  "Start drawing a chart object C in optional BUFF.
+Begins at line LINE."
+  (with-silent-modifications
+    (save-excursion
+      (if buff (set-buffer buff))
+      ;; (goto-line line)
+      (insert (make-string (window-height (selected-window)) ?\n))
+      ;; (insert (make-string ((oref c 100) ?\n)))
+      ;; Start by displaying the axis
+      (chart-draw-axis c)
+      ;; Display title
+      (org-habit-stats-chart-draw-title c)
+      ;; Display data
+      ;; (message "Rendering chart...")
+      (sit-for 0)
+      (chart-draw-data c)
+      ;; (message "Rendering chart...done")
+      )))
+(defun org-habit-stats-chart-bar-quickie-extended (dir title namelst nametitle numlst numtitle
+                                 &optional max sort-pred width height topmargin leftmargin titleface nameface labelface)
+  "Modification of function chart-bar-quickie to support custom graph
+dimensions, margins, and faces. Inserts graph into current buffer,
+with width WIDTH, height HEIGHT, vertical margin of TOPMARGIN from current
+line, horizontal margin of LEFTMARGIN, face TITLEFACE for title, face
+NAMEFACE for axis names, face LABELFACE for labels for values.
+Original Docstring:
+Wash over the complex EIEIO stuff and create a nice bar chart.
+Create it going in direction DIR [`horizontal' `vertical'] with TITLE
+using a name sequence NAMELST labeled NAMETITLE with values NUMLST
+labeled NUMTITLE.
+Optional arguments:
+Set the chart's max element display to MAX, and sort lists with
+SORT-PRED if desired."
+  (interactive)
+  (let ((nc (make-instance 'chart-bar
+                           :title title
+                           :title-face titleface
+                           :x-width width
+                           :y-width height
+                           :x-margin topmargin
+                           :y-margin leftmargin
+                           :key-label "8-m"  ; This is a text key pic
+                           :direction dir
+                           ))
+        (iv (eq dir 'vertical)))
+    (chart-add-sequence nc
+                        (make-instance 'org-habit-stats-chart-sequence
+                                       :data namelst
+                                       :name nametitle)
+                        (if iv 'x-axis 'y-axis))
+    (chart-add-sequence nc
+                        (make-instance 'org-habit-stats-chart-sequence
+                                       :data numlst
+                                       :name numtitle)
+                        (if iv 'y-axis 'x-axis))
+    (oset (oref nc x-axis) name-face nameface)
+    (oset (oref nc x-axis) labels-face labelface)
+    (oset (oref nc y-axis) name-face nameface)
+    (oset (oref nc y-axis) labels-face labelface)
+    (if sort-pred (chart-sort nc sort-pred))
+    (if (integerp max) (chart-trim nc max))
+    (org-habit-stats-chart-draw nc)))
+
+;;; Calendar helpers
+;; create calendar buffer, inject text at top, mark custom dates, set so curr month on the right first
+(defun org-habit-stats-make-calendar-buffer (habit-info)
+  ;; (interactive "P")
+  ;; (with-current-buffer
+  (with-current-buffer
+   (get-buffer-create org-habit-stats-calendar-buffer)
+  (calendar-mode)
+  (let* ((date (calendar-current-date))
+         (month (calendar-extract-month date))
+         (year (calendar-extract-year date))
+         (current-month-align-right-offset 1)
+         (completed-dates (nth 4 habit-info)))
+    (calendar-increment-month month year (- current-month-align-right-offset))
+    (calendar-generate-window month year)
+    (org-habit-stats-calendar-mark-habits habit-info))
+  (run-hooks 'calendar-initial-window-hook)))
+(defun org-habit-stats-calendar-mark-habits (habit-info)
+  (let ((completed-dates (nth 4 habit-info))
+        (calendar-buffer org-habit-stats-calendar-buffer))
+    (dolist (completed-day completed-dates nil)
+      (let ((completed-day-gregorian (calendar-gregorian-from-absolute completed-day)))
+        (when (calendar-date-is-visible-p completed-day-gregorian)
+            (calendar-mark-visible-date completed-day-gregorian 'org-habit-stats-calendar-completed))))))
+
+(defun org-habit-stats-get-calendar-contents ()
+  (with-current-buffer org-habit-stats-calendar-buffer
+    (buffer-string)))
+(defun org-habit-stats-get-calendar-overlays ()
+  (with-current-buffer org-habit-stats-calendar-buffer
+    (let ((ol-list (overlay-lists)))
+      (append (car ol-list) (cdr ol-list)))))
+(defun org-habit-stats-apply-overlays (ol-list offset buffer)
+  (dolist (ol ol-list)
+     (move-overlay (copy-overlay ol)
+                   (+ (overlay-start ol) offset)
+                   (+ (overlay-end ol) offset)
+                   buffer
+                   )))
+
+
+(defun org-habit-stats-test-1-make-buffer ()
+  (interactive)
+  (org-habit-stats-make-calendar-buffer (org-habit-parse-todo (point))))
+(defun org-habit-stats-test-make-buffer ()
+  (interactive)
+  (org-habit-stats-create-habit-buffer (org-habit-parse-todo (point))))
+
+
+;; create a calender buffer with a custom name, don't open it
+
+
+
+;; create a new mode
+
+;; insert the calender buffer's contents into the current buffer
+
 
 
 (provide 'org-habit-stats)
