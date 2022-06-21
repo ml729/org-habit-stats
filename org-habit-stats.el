@@ -110,27 +110,31 @@ chart-face-color-list is unaffected.")
   "Day names used in graphs.")
 
 (defcustom org-habit-stats-graph-date-format
-  "%m-%d %a"
+  "%m/%d"
   "Date format used in graphs for dates in graphs.")
+
+(defcustom org-habit-stats-stat-functions-alist
+  '(())
+  "Alist mapping stat functions to their names.")
 
 (defcustom org-habit-stats-graph-functions-alist
   '((org-habit-stats-graph-completions-per-month . ("m"
                                                    "Monthly Completions"
                                                    "Months"
                                                    "Completions"
-                                                   'horizontal
+                                                   vertical
                                                    5))
     (org-habit-stats-graph-completions-per-week . ("w"
                                                    "Weekly Completions"
                                                    "Weeks"
                                                    "Completions"
-                                                   'horizontal
+                                                   vertical
                                                    10))
     (org-habit-stats-graph-completions-per-weekday . ("d"
                                                    "Completions by Day"
                                                    "Day"
                                                    "Completions"
-                                                   'horizontal
+                                                   vertical
                                                    7)))
   "Alist mapping graph functions to a list containing the key
 that invokes the function, the title of the graph, the name of
@@ -142,6 +146,9 @@ max number of bars to show at a time.")
 
 (defconst org-habit-stats-calendar-buffer "*Org-Habit-Stats Calendar*"
   "Name of the buffer used for the calendar.")
+
+(defcustom org-habit-stats-graph-default-func 'org-habit-stats-graph-completions-per-week
+  "Current graph function used in org habit stats buffer.")
 
 (defvar org-habit-stats-current-habit-data nil
   "Output from org-habit-parse-todo of currently viewed habit.")
@@ -350,7 +357,7 @@ second containing the corresponding counts per category."
    (lambda (d) (- d (mod d 7))) ;; converts absolute date to the sunday before or on; (month day year) format
    (lambda (d1 d2) (< d1 d2))
    (lambda (d) (let ((time (days-to-time d)))
-                 (format org-habit-stats-graph-date-format day)))))
+                 (format-time-string org-habit-stats-graph-date-format time)))))
 
 (defun org-habit-stats-graph-completions-per-weekday (history)
   "Returns a pair of lists (weeks . counts)."
@@ -571,13 +578,7 @@ second containing the corresponding counts per category."
     (insert "Days Completed")
     (insert (make-string 2 ?\n))
     ;;; create calendar
-    (org-habit-stats-make-calendar-buffer habit-info)
-    (let ((cal-offset-for-overlay (1- (point))))
-      (insert (org-habit-stats-get-calendar-contents))
-      (org-habit-stats-apply-overlays (org-habit-stats-get-calendar-overlays)
-                                      cal-offset-for-overlay
-                                      (current-buffer)))
-    (insert (make-string 2 ?\n))
+    (org-habit-stats-insert-calendar)
     (org-habit-stats--insert-divider)
     (insert "Graph")
     (insert (make-string 3 ?\n))
@@ -585,33 +586,46 @@ second containing the corresponding counts per category."
     (org-habit-stats-draw-graph history)
     ))
 
+(defun org-habit-stats-insert-calendar (habit-info)
+    (org-habit-stats-make-calendar-buffer habit-info)
+    (let ((cal-offset-for-overlay (1- (point))))
+      (insert (org-habit-stats-get-calendar-contents))
+      (org-habit-stats-apply-overlays (org-habit-stats-get-calendar-overlays)
+                                      cal-offset-for-overlay
+                                      (current-buffer)))
+    (insert (make-string 2 ?\n))
+  )
+
 (defun org-habit-stats-draw-graph (history)
   (let* ((func org-habit-stats-graph-current-func)
-         (func-info (rassoc func org-habit-stats-graph-functions-alist))
+         (func-info (cdr (assoc func org-habit-stats-graph-functions-alist)))
          (graph-title (nth 1 func-info))
          (x-name (nth 2 func-info))
          (y-name (nth 3 func-info))
          (dir (nth 4 func-info))
          (max-bars (nth 5 func-info))
-         (graph-data-names (funcall org-habit-stats-graph-current-func history))
+         (graph-data-names (funcall func history))
          (graph-names (car graph-data-names))
-         (graph-data (cdr graph-data-names)))
-    (org-habit-stats-draw-graph
+         (graph-data (cdr graph-data-names))
+         )
+    (org-habit-stats--draw-graph
      dir
      graph-title
      graph-names
      x-name
      graph-data
-     y-name)))
+     y-name
+     max-bars)
+    ))
 
-(defun org-habit-stats--draw-graph (dir title namelst nametitle numlst numtitle)
+(defun org-habit-stats--draw-graph (dir title namelst nametitle numlst numtitle max-bars)
   (let ((namediff (- org-habit-stats-graph-min-num-bars (length namelst)))
         (numdiff (- org-habit-stats-graph-min-num-bars (length numlst))))
     (if (> namediff 0)
         (dotimes (x namediff)
         (push "" namelst)))
     (if (> numdiff 0)
-        (dotimes (x namediff)
+        (dotimes (x numdiff)
         (push 0 numlst)))
   (org-habit-stats-chart-bar-quickie-extended
    dir
@@ -620,10 +634,9 @@ second containing the corresponding counts per category."
    nametitle
    numlst
    numtitle
-   5
+   max-bars
    nil
-   2
-   0
+   org-habit-stats-graph-current-offset
    t
    org-habit-stats-graph-width
    org-habit-stats-graph-height
@@ -650,7 +663,8 @@ offset elements, keep the next MAX elements, and trim the
 remaining elements. If END is t, trimming begins at the end of
 the sequence instead."
   (let ((s (oref c sequences))
-        (nx (oref c x-axis)))
+        (nx (if (equal (oref c direction) 'horizontal)
+                        (oref c y-axis) (oref c x-axis))))
     (dolist (x s)
       (oset x data (org-habit-stats--chart-trim-offset
                     (oref x data) max offset end))
