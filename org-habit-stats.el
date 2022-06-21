@@ -38,15 +38,31 @@
   :type 'string)
 
 
-(defcustom org-habit-stats-chart-face-color-list '("red" "green" "blue"
-                                "cyan" "yellow" "purple")
-  "Colors to use for bars of habit bar graph. The original value of
+(defcustom org-habit-stats-graph-colors-for-light-list
+  '("#ef7969"
+    "#49c029"
+    "#ffcf00"
+    "#7090ff"
+    "#e07fff"
+    "#70d3f0")
+  "Colors to use for bars of habit bar graph for light themes. The default colors are
+Modus Vivendi's colors for graphs. The original value of
 chart-face-color-list is unaffected.")
 
-(setq org-habit-stats-chart-face-color-list
-      (mapcar (lambda (x) (face-attribute x :foreground nil t))
-              '(org-level-1 org-level-2 org-level-3 org-level-4 org-level-5))
-      )
+(defcustom org-habit-stats-graph-colors-for-dark-list
+  '("#b52c2c"
+    "#24bf00"
+    "#f7ef00"
+    "#2fafef"
+    "#bf94fe"
+    "#47dfea")
+  "Colors to use for bars of habit bar graph for dark themes. The default colors are
+Modus Vivendi's colors for graphs. The original value of
+chart-face-color-list is unaffected.")
+
+(defvar org-habit-stats-graph-face-list nil
+  "Faces used for bars in graphs, generated from org-habit-stats-graph-colors-for-light-list
+or org-habit-stats-graph-colors-for-dark-list based on the background type.")
 
 (defcustom org-habit-stats-graph-width 70
   "Width of x-axis of graph (in columns), not including origin.")
@@ -114,8 +130,17 @@ chart-face-color-list is unaffected.")
   "Date format used in graphs for dates in graphs.")
 
 (defcustom org-habit-stats-stat-functions-alist
-  '(())
-  "Alist mapping stat functions to their names.")
+  '((org-habit-stats-exp-smoothing-list-score . "Strength")
+     ;; (org-habit-stats-present-streak . "Current-Streak")
+     ;; (org-habit-stats-present-unstreak . "Current Unstreak")
+     ;; org-habit-stats-recent-unstreak
+     ;; (org-habit-stats-record-streak . "Record Streak")
+     (org-habit-stats-alltime-total . "Total Completions")
+     (org-habit-stats-alltime-percentage . "Total Percentage"))
+  "Alist mapping stat functions to their names. All stat
+functions take in the original parsed habit data (outputted by
+org-habit-parse-todo) and the full habit history (outputted by
+org-habit-stats-get-full-history-new-to-old)")
 
 (defcustom org-habit-stats-graph-functions-alist
   '((org-habit-stats-graph-completions-per-month . ("m"
@@ -219,7 +244,7 @@ newest to oldest."
 ;;     (if (> (- (car history) day) 1)
 ;;         (dotimes i (1- (-))
 ;;                  )))))
-(defun org-habit-stats-get-full-history (history)
+(defun org-habit-stats-get-full-history-new-to-old (history)
   (let* ((today (org-today))
          (history (add-to-list 'history (1+ today)))
          (bin-hist nil))
@@ -233,15 +258,24 @@ newest to oldest."
        b)
      history
      (car history))
-    (reverse bin-hist)))
+    bin-hist))
+(defun org-habit-stats-get-full-history-old-to-new (history)
+  (reverse (org-habit-stats-get-full-history-new-to-old history)))
 
 ;; Stats
-(defun org-habit-stats-streak (history)
-  "Returns the current streak."
-  (if (= (pop history) 1)
-      (1+ (org-habit-stats-streak history))
+(defun org-habit-stats--streak (h)
+  (if (= (cdr (pop h)) 1)
+      (1+ org-habit-stats--streak h)
     0))
-(defun org-habit-stats--record-streak-full (history)
+(defun org-habit-stats-streak (history &optional habit-data)
+  "Returns the current streak. If habit is completed today,
+include it. If not, begin counting current streak from
+yesterday."
+  (if (= (cdr (pop history)) 1)
+      (1+ (org-habit-stats-streak history))
+    (org-habit-stats-streak history)))
+
+(defun org-habit-stats--record-streak-full (history &optional habit-data)
   "Returns (a b) where a is the record streak,
    b is the day the record streak occurred."
   (let ((record-streak 0)
@@ -250,7 +284,7 @@ newest to oldest."
         (curr-streak-start 0)
         (curr-day 0))
     (while history
-      (if (= (pop history) 1)
+      (if (= (cdr (pop history)) 1)
           (progn
             (when (= curr-streak 0)
               (setq curr-streak-start curr-day))
@@ -268,30 +302,38 @@ newest to oldest."
                (split-string s " "))
    " "))
 
-(defun org-habit-stats-record-streak-format (history)
-  (let* ((record-data (org-habit-stats--record-streak-full history))
+(defun org-habit-stats-record-streak-format (history &optional habit-data)
+  (let* ((record-data (org-habit-stats--record-streak-full history habit-data))
          (record-streak (car record-data))
          (record-day (cdr record-data)))
     (concat (number-to-string record-streak)
-            ", achieved on "
+            ", on "
             (single-whitespace-only (org-agenda-format-date-aligned record-day)))))
 
-(defun org-habit-stats-N-day-total (history N)
+(defun org-habit-stats--N-day-total (history N)
   (if (and (> N 0) history)
-      (if (= (pop history) 1)
+      (if (= (cdr (pop history)) 1)
           (1+ (org-habit-stats-N-day-total history (1- N)))
         (org-habit-stats-N-day-total history (1- N)))
     0))
-(defun org-habit-stats-N-day-percentage (history N)
-  (/ (org-habit-stats-N-day-total history N) (float N)))
+(defun org-habit-stats--N-day-percentage (history N habit-data)
+  (let ((repeat-len (nth 1 habit-data)))
+  (/ (org-habit-stats-N-day-total history N) (/ (float N) repeat-len))))
 
-(defun org-habit-stats-30-day-total (history)
+(defun org-habit-stats-30-day-total (history &optional habit-data)
   (org-habit-stats-N-day-percentage history 30))
 
-(defun org-habit-stats-365-day-total (history)
+(defun org-habit-stats-365-day-total (history &optional habit-data)
   (org-habit-stats-N-day-percentage history 365))
 
-(defun org-habit-stats-exp-smoothing-list--full (history)
+(defun org-habit-stats-alltime-total (history habit-data)
+  (length (nth 4 habit-data)))
+
+(defun org-habit-stats-alltime-percentage (history habit-data)
+  (let ((repeat-len (nth 1 habit-data)))
+  (/ (length (nth 4 habit-data)) (/ (float (length history)) repeat-len))))
+
+(defun org-habit-stats-exp-smoothing-list--full (history &optional habit-data)
   "Returns score for a binary list HISTORY,
    computed via exponential smoothing. (Inspired by the open
    source Loop Habit Tracker app's score.)"
@@ -301,11 +343,11 @@ newest to oldest."
          (alpha (expt 0.5 (/ (sqrt freq) 13))))
     (while history
       (push (+ (* alpha (nth 0 scores))
-               (* (- 1 alpha) (pop history))) scores))
+               (* (- 1 alpha) (cdr (pop history)))) scores))
     (setq scores (mapcar (lambda (x) (* 100 x)) scores))
     scores))
-(defun org-habit-stats-exp-smoothing-list-score (history)
-  (nth 0 (org-habit-stats-exp-smoothing-list--full history)))
+(defun org-habit-stats-exp-smoothing-list-score (history &optional habit-data)
+  (nth 0 (org-habit-stats-exp-smoothing-list--full history habit-data)))
 
 (defun org-habit-stats-get-freq (seq &optional key-func value-func)
   "Return frequencies of elements in SEQ. If KEY-FUNC, use
@@ -334,7 +376,7 @@ second containing the corresponding counts per category."
   (mapcar (lambda (x) (cons (funcall format-func (car x)) (cdr x)))
           (sort (org-habit-stats-get-freq
                  (mapcar (lambda (x) (cons (funcall category-func (car x)) (cdr x)))
-                         (org-habit-stats-get-full-history history))
+                         (org-habit-stats-get-full-history-old-to-new history))
                  (lambda (x) (car x))
                  (lambda (x) (cdr x)))
                 (lambda (x y) (funcall predicate-func (car x) (car y)))))))
@@ -535,7 +577,8 @@ second containing the corresponding counts per category."
   (setq org-habit-stats-graph-current-offset 0)
   (if org-habit-stats-graph-default-func
         (setq org-habit-stats-graph-current-func org-habit-stats-graph-default-func)
-        (setq org-habit-stats-graph-current-func (caar org-habit-stats-graph-functions-alist)))
+    (setq org-habit-stats-graph-current-func (caar org-habit-stats-graph-functions-alist)))
+  (setq org-habit-stats-graph-face-list (org-habit-stats-graph-create-faces))
   )
 (defvar org-habit-stats-mode-map
   (let ((map (make-keymap)))
@@ -556,38 +599,75 @@ second containing the corresponding counts per category."
 
 (defun org-habit-stats-refresh-buffer ())
 
+(defun org-habit-stats-exit ()
+  (interactive)
+  (kill-buffer org-habit-stats-calendar-buffer)
+  (kill-buffer org-habit-stats-buffer))
+
 ;; creating the habit buffer
 (defun org-habit-stats--insert-divider ()
     (insert (make-string (window-width) org-agenda-block-separator))
     (insert (make-string 1 ?\n)))
-(defun org-habit-stats-create-habit-buffer (habit-info)
+(defun org-habit-stats-create-habit-buffer (habit-title habit-data)
   "Creates buffer displaying:
    - Calendar where days habit is done are marked
    - Graph of habit score or histogram of habit totals monthly/weekly
    - Various habit statistics"
-  (let ((buff (current-buffer))
-        (history (nth 4 habit-info)))
+  (let* ((buff (current-buffer))
+        (completed-history (nth 4 habit-data))
+        (full-history (org-habit-stats-get-full-history-new-to-old completed-history))
+        )
     (switch-to-buffer (get-buffer-create org-habit-stats-buffer))
     (org-habit-stats-mode)
     ;;; inject habit data
-    (insert
-     (propertize "Run a mile\n" 'face 'bold))
-    (insert "Score: 5\tCurrent Streak: 25\t Total Completions: 50\n")
+    ;; (insert
+    ;;  (propertize "Run a mile\n" 'face 'bold))
+    ;; (insert "Score: 5\tCurrent Streak: 25\t Total Completions: 50\n")
+    (org-habit-stats-insert-stats habit-title habit-data full-history)
     (insert (make-string 1 ?\n))
     (org-habit-stats--insert-divider)
     (insert "Days Completed")
     (insert (make-string 2 ?\n))
     ;;; create calendar
-    (org-habit-stats-insert-calendar)
+    (org-habit-stats-make-calendar-buffer habit-data)
+    (org-habit-stats-insert-calendar habit-data)
     (org-habit-stats--insert-divider)
     (insert "Graph")
     (insert (make-string 3 ?\n))
     ;;; create graph
-    (org-habit-stats-draw-graph history)
+    (org-habit-stats-draw-graph completed-history)
     ))
 
-(defun org-habit-stats-insert-calendar (habit-info)
-    (org-habit-stats-make-calendar-buffer habit-info)
+(defun org-habit-stats-format-one-stat (statname statdata)
+  (concat (propertize statname 'face 'bold)
+          ": "
+          (propertize (cond ((integerp statdata) (format "%d" statdata))
+                            ((floatp statdata) (format "%.3f" statdata))
+                            (t statdata))
+                      'face 'default)
+          "\t"))
+(defun org-habit-stats-insert-stats (habit-title habit-data full-history)
+  ;; insert habit name
+  (insert (propertize habit-title 'face 'default) "\n")
+  ;; insert habit repeat data, next due date
+  (insert (number-to-string (nth 0 habit-data)) "\n")
+  ;; insert habit stats
+  (let ((i 0))
+  (dolist (x org-habit-stats-stat-functions-alist)
+    (let* ((statfunc (car x))
+           (statname (cdr x))
+           (statresult (if (fboundp statfunc) (funcall statfunc full-history habit-data))))
+      (when statresult
+      (insert (org-habit-stats-format-one-stat statname statresult))
+      (when (and (> i 0) (= (mod i 3) 0))
+        (insert "\n"))
+      (setq i (1+ i)))
+      )
+    ))
+  (insert "\n")
+  )
+
+(defun org-habit-stats-insert-calendar (habit-data)
     (let ((cal-offset-for-overlay (1- (point))))
       (insert (org-habit-stats-get-calendar-contents))
       (org-habit-stats-apply-overlays (org-habit-stats-get-calendar-overlays)
@@ -627,6 +707,7 @@ second containing the corresponding counts per category."
     (if (> numdiff 0)
         (dotimes (x numdiff)
         (push 0 numlst)))
+    (let ((chart-face-list org-habit-stats-graph-face-list))
   (org-habit-stats-chart-bar-quickie-extended
    dir
    title
@@ -644,7 +725,7 @@ second containing the corresponding counts per category."
    org-habit-stats-graph-left-margin
    'org-habit-stats-graph-title
    'org-habit-stats-graph-name
-   'org-habit-stats-graph-label)))
+   'org-habit-stats-graph-label))))
 
 (defun org-habit-stats--chart-trim-offset (seq max offset end)
   (let* ((newbeg (min offset (- (length seq) max)))
@@ -672,22 +753,30 @@ the sequence instead."
                     (oref nx items) max offset end)))))
 
 ;;; Graph helpers
+;; (defun org-habit-stats-color-brightness (hex)
+;;   "Formula from https://alienryderflex.com/hsp.html"
+;;   (let ((R (substring hex 1 3))
+;;         (G (substring hex 3 5))
+;;         (B (substring hex 5 7))))
+;;   )
+
 (defun org-habit-stats-graph-create-faces ()
   "TODO add terminal support"
-  (if (display-color-p)
-      (let ((faces ())
-            nf)
-      (dolist (c chart-face-color-list)
-          (setq nf (make-face
-                    (intern (concat "org-habit-chart-" (car cl))))
-          (set-face-background nf c)
-          (set-face-foreground nf "black")
-          (push nf faces)))
-        faces)))
+  (let ((light-bg (if (equal (frame-parameter nil 'background-mode) 'light) t nil))
+        (faces ())
+        newface)
+    (dolist (color (if light-bg org-habit-stats-graph-colors-for-light-list
+                     org-habit-stats-graph-colors-for-dark-list))
+      (setq newface (make-face
+                (intern (concat "org-habit-chart-" color))))
+            (set-face-background newface color)
+            (set-face-foreground newface "black")
+            (push newface faces))
+    faces))
 (setq chart-face-use-pixmaps t)
 ;;; Calendar helpers
 ;; create calendar buffer, inject text at top, mark custom dates, set so curr month on the right first
-(defun org-habit-stats-make-calendar-buffer (habit-info)
+(defun org-habit-stats-make-calendar-buffer (habit-data)
   ;; (interactive "P")
   ;; (with-current-buffer
   (with-current-buffer
@@ -697,14 +786,14 @@ the sequence instead."
          (month (calendar-extract-month date))
          (year (calendar-extract-year date))
          (current-month-align-right-offset 1)
-         (completed-dates (nth 4 habit-info)))
+         (completed-dates (nth 4 habit-data)))
     (calendar-increment-month month year (- current-month-align-right-offset))
     (calendar-generate-window month year)
-    (org-habit-stats-calendar-mark-habits habit-info))
+    (org-habit-stats-calendar-mark-habits habit-data))
   (run-hooks 'calendar-initial-window-hook)))
 
-(defun org-habit-stats-calendar-mark-habits (habit-info)
-  (let ((completed-dates (nth 4 habit-info))
+(defun org-habit-stats-calendar-mark-habits (habit-data)
+  (let ((completed-dates (nth 4 habit-data))
         (calendar-buffer org-habit-stats-calendar-buffer))
     (dolist (completed-day completed-dates nil)
       (let ((completed-day-gregorian (calendar-gregorian-from-absolute completed-day)))
@@ -727,6 +816,13 @@ the sequence instead."
                    (+ (overlay-end ol) offset)
                    buffer)))
 
+(defun org-habit-stats-calendar-scroll-right ()
+  (interactive)
+  (with-current-buffer org-habit-stats-calendar-buffer
+    (calendar-scroll-right)
+    (org-habit-stats-calendar-mark-habits org-habit-stats-current-habit-data))
+  (org-habit-stats-refresh-buffer)
+  )
 
 (defun org-habit-stats-test-1-make-buffer ()
   (interactive)
@@ -734,6 +830,13 @@ the sequence instead."
 (defun org-habit-stats-test-make-buffer ()
   (interactive)
   (org-habit-stats-create-habit-buffer (org-habit-parse-todo (point))))
+
+(defun org-habit-stats-view-habit-at-point ()
+  (interactive)
+  (let ((habit-title (org-element-property :raw-value (org-element-at-point)))
+        (habit-data (org-habit-parse-todo (point))))
+    (org-habit-stats-create-habit-buffer habit-title habit-data))
+  )
 
 
 ;; create a calender buffer with a custom name, don't open it
