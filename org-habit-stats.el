@@ -206,7 +206,7 @@ x-axis name, y-axis name.")
   :group 'org-habit-stats)
 
 (defface org-habit-stats-calendar-completed
-  '((t (:background "#006800")))
+  '((t (:background "#e0a3ff")))
   "Face for days in the calendar where the habit was completed."
   :group 'org-habit-stats)
 
@@ -450,7 +450,8 @@ second containing the corresponding counts per category."
                        (org-habit-stats-365-day-total
                         history))))))
 
-(defun number-to-string-maybe (x)
+
+(defun org-habit-stats-number-to-string-maybe (x)
   (cond ((integerp x) (format "%d" x))
         ((floatp x) (format "%.5f" x))
         (t x)))
@@ -465,7 +466,7 @@ second containing the corresponding counts per category."
       (mapcar (lambda (prop-func)
                 ;; (print (cdr prop-func))
                 (org-set-property (car prop-func)
-                                  (number-to-string-maybe
+                                  (org-habit-stats-number-to-string-maybe
                                    (funcall (cdr prop-func) history))))
               '(("SCORE" . org-habit-stats-exp-smoothing-list-score)
                 ("CURRENT_STREAK" . org-habit-stats-streak)
@@ -473,6 +474,19 @@ second containing the corresponding counts per category."
                 ("YEARLY" . org-habit-stats-365-day-total)
                 ("RECORD_STREAK" . org-habit-stats-record-streak-format)))
       (org-habit-stats-update-graph history))))
+
+(defun org-habit-stats-format-property-name (s)
+  "Replace spaces with underscores in string S."
+  (replace-regexp-in-string "[[:space:]]" "_" s))
+(defun org-habit-stats-update-properties ()
+  (interactive)
+  (when (org-is-habit-p (point))
+    (let* ((habit-data (org-habit-parse-todo (point)))
+           (history (org-habit-stats-get-full-history-new-to-old (nth 4 habit-data)))
+           (statresults (org-habit-stats-calculate-stats habit-data history)))
+      (dolist (x statresults)
+        (org-set-property (cons x)
+                          (org-habit-stats-number-to-string-maybe (cdr x)))))))
 
 ;; (add-hook 'org-after-todo-state-change-hook 'org-habit-stats-update-score)
 ;; (advice-add 'org-todo :after (lambda (x) (org-habit-stats-update-score-2)))
@@ -606,7 +620,7 @@ second containing the corresponding counts per category."
 
 ;; creating the habit buffer
 (defun org-habit-stats--insert-divider ()
-    (insert (make-string (window-width) org-agenda-block-separator))
+    (insert (make-string (max 80 (window-width)) org-agenda-block-separator))
     (insert (make-string 1 ?\n)))
 (defun org-habit-stats-create-habit-buffer (habit-title habit-data)
   "Creates buffer displaying:
@@ -623,8 +637,17 @@ second containing the corresponding counts per category."
     ;; (insert
     ;;  (propertize "Run a mile\n" 'face 'bold))
     ;; (insert "Score: 5\tCurrent Streak: 25\t Total Completions: 50\n")
+      ;; insert habit name
+  (insert (propertize habit-title 'face 'org-agenda-structure) "\n")
+  ;; insert habit repeat data, next due date
+  (insert (format "Repeats every %s%d days" (nth 5 habit-data) (nth 1 habit-data)) "\n")
+  (insert (org-format-time-string "Next Scheduled: %A, %B %d, %Y"
+                              (days-to-time (nth 0 habit-data))) "\n\n")
+  ;; TODO for format-time-string, must subtract 1970 from the year before
+  ;; write a function org-habit-stats--
+    (org-habit-stats--insert-divider)
+    (insert "Statistics" "\n\n")
     (org-habit-stats-insert-stats habit-title habit-data full-history)
-    (insert (make-string 1 ?\n))
     (org-habit-stats--insert-divider)
     (insert "Days Completed")
     (insert (make-string 2 ?\n))
@@ -639,33 +662,38 @@ second containing the corresponding counts per category."
     ))
 
 (defun org-habit-stats-format-one-stat (statname statdata)
-  (concat (propertize statname 'face 'bold)
-          ": "
+  (concat (propertize statname 'face 'default)
+          " "
           (propertize (cond ((integerp statdata) (format "%d" statdata))
                             ((floatp statdata) (format "%.3f" statdata))
                             (t statdata))
-                      'face 'default)
-          "\t"))
-(defun org-habit-stats-insert-stats (habit-title habit-data full-history)
-  ;; insert habit name
-  (insert (propertize habit-title 'face 'default) "\n")
-  ;; insert habit repeat data, next due date
-  (insert (number-to-string (nth 0 habit-data)) "\n")
-  ;; insert habit stats
-  (let ((i 0))
+                      'face 'modus-themes-refine-green)
+          "\n"))
+
+(defun org-habit-stats-calculate-stats (habit-data full-history)
+  (let ((statresults '()))
   (dolist (x org-habit-stats-stat-functions-alist)
     (let* ((statfunc (car x))
            (statname (cdr x))
            (statresult (if (fboundp statfunc) (funcall statfunc full-history habit-data))))
       (when statresult
-      (insert (org-habit-stats-format-one-stat statname statresult))
-      (when (and (> i 0) (= (mod i 3) 0))
-        (insert "\n"))
-      (setq i (1+ i)))
-      )
-    ))
-  (insert "\n")
-  )
+        (push (cons statname statresult) statresults))))
+    statresults))
+
+
+
+(defun org-habit-stats-insert-stats (habit-title habit-data full-history)
+  ;; insert habit stats
+    (let* ((i 0)
+           (statresults (org-habit-stats-calculate-stats habit-data full-history)))
+      (dolist (x statresults)
+        (insert (org-habit-stats-format-one-stat (car x)
+                                                 (cdr x)))
+        (when (and (> i 0) (= (mod i 3) 0))
+          (insert "\n"))
+        (setq i (1+ i)))
+      (insert "\n")))
+
 
 (defun org-habit-stats-insert-calendar (habit-data)
     (let ((cal-offset-for-overlay (1- (point))))
@@ -787,9 +815,10 @@ the sequence instead."
          (year (calendar-extract-year date))
          (current-month-align-right-offset 1)
          (completed-dates (nth 4 habit-data)))
-    (calendar-increment-month month year (- current-month-align-right-offset))
     (calendar-generate-window month year)
-    (org-habit-stats-calendar-mark-habits habit-data))
+    (calendar-increment-month month year (- current-month-align-right-offset))
+    (org-habit-stats-calendar-mark-habits habit-data)
+    )
   (run-hooks 'calendar-initial-window-hook)))
 
 (defun org-habit-stats-calendar-mark-habits (habit-data)
