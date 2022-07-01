@@ -31,7 +31,6 @@
   :prefix "org-habit-stats-")
 
 ;;; Defcustoms
-
 (defcustom org-habit-stats-insert-graph-in-file t
   "Whether or not to insert ascii graph of habit scores in file."
   :group 'org-habit-stats
@@ -178,7 +177,7 @@ max number of bars to show at a time.")
 (defcustom org-habit-stats-graph-default-func 'org-habit-stats-graph-completions-per-week
   "Current graph function used in org habit stats buffer.")
 
-(defcustom org-habit-stats-new-habit-message "A year from now, you'll wish you started today."
+(defcustom org-habit-stats-new-habit-message "A new habit."
   "Message to display when habit has 0 completions logged.")
 
 ;;; Defvars
@@ -229,11 +228,29 @@ x-axis name, y-axis name.")
   :group 'org-habit-stats)
 
 (defface org-habit-stats-calendar-completed
-  '((t (:background "#e0a3ff")))
+  '((t (:foreground "#004c00" :background "#e0a3ff")))
   "Face for days in the calendar where the habit was completed."
   :group 'org-habit-stats)
 
+(defface org-habit-stats-stat-value
+  '((t (:foreground "#004c00" :background "#aceaac")))
+  "Face for statistics value."
+  :group 'org-habit-stats)
 
+(defface org-habit-stats-stat-name
+  '((t (:inherit org-agenda-structure-secondary)))
+  "Face for statistics value."
+  :group 'org-habit-stats)
+
+(defface org-habit-stats-habit-name
+  '((t (:inherit org-agenda-structure)))
+  "Face for habit name."
+  :group 'org-habit-stats)
+
+(defface org-habit-stats-section-name
+  '((t (:inherit default)))
+  "Face for section name in org-habit-stats buffer."
+  :group 'org-habit-stats)
 
 ;; Stats functions
 (defun org-habit-stats-dates-to-binary (tasks)
@@ -824,14 +841,32 @@ display to MAX, and sort lists with SORT-PRED if desired."
   (org-habit-stats-refresh-graph-section))
 
 ;;; Insert sections
+(defun org-habit-stats-insert-habit-info (habit-data habit-name habit-description)
+  (let ((habit-repeat-period (nth 1 habit-data))
+        (habit-repeat-string (nth 5 habit-data))
+        (habit-next-scheduled (nth 0 habit-data)))
+    (insert (propertize habit-name 'face 'org-habit-stats-habit-name)
+            "\n")
+    (if habit-description
+        (insert habit-description "\n"))
+    ;; insert habit repeat data, next due date
+    (insert (format "Repeats every %s%d days"
+                    habit-repeat-string habit-repeat-period)
+            "\n")
+    (insert (org-format-time-string "Next Scheduled: %A, %B %d, %Y"
+                                    (days-to-time habit-next-scheduled))
+            "\n")
+
+    ))
+
 (defun org-habit-stats-format-one-stat (statname statdata)
   (let* ((fdata (cond ((integerp statdata) (format "%d" statdata))
                       ((floatp statdata) (format "%.3f" statdata))
                       (t statdata)))
          (numspaces (- 39 (+ (length statname) (length fdata)))))
-    (concat (propertize statname 'face 'default)
+    (concat (propertize statname 'face 'org-habit-stats-stat-name)
             " "
-            (propertize fdata 'face 'modus-themes-refine-green)
+            (propertize fdata 'face 'org-habit-stats-stat-value)
             (if (> numspaces 0)
                 (make-string numspaces 32)))))
 
@@ -850,24 +885,28 @@ display to MAX, and sort lists with SORT-PRED if desired."
       (setq org-habit-stats-stat-bounds (cons stats-start (point)))))
 (defun org-habit-stats-insert-calendar (habit-data)
   (let ((cal-start (point))
+        (cal-start-line (line-number-at-pos))
         (cal-offset-for-overlay (1- (point))))
-      (insert (org-habit-stats-get-calendar-contents))
-      (org-habit-stats-apply-overlays (org-habit-stats-get-calendar-overlays)
-                                      cal-offset-for-overlay
-                                      (current-buffer))
-  (insert (make-string 2 ?\n))
-  (setq org-habit-stats-calendar-bounds (cons cal-start (point))))
-  )
+    (insert (org-habit-stats-get-calendar-contents))
+    (org-habit-stats-apply-overlays (org-habit-stats-get-calendar-overlays)
+                                    cal-offset-for-overlay
+                                    (current-buffer))
+    (let ((calendar-height (- (line-number-at-pos) cal-start-line)))
+      (when (< calendar-height 8)
+        (insert (make-string (- 7 calendar-height) ?\n)))
+    (insert (make-string 1 ?\n))
+    (setq org-habit-stats-calendar-bounds (cons cal-start (point))))))
 
 ;;; Refresh sections
 (defun org-habit-stats-refresh-graph-section ()
   (let* ((graph-bounds org-habit-stats-graph-bounds)
-        (graph-start (car graph-bounds))
-        (graph-end (cdr graph-bounds)))
+         (graph-start (car graph-bounds))
+         (graph-end (cdr graph-bounds)))
     (save-excursion
-     (goto-char graph-start)
-     (delete-region graph-start graph-end)
-     (org-habit-stats-draw-graph org-habit-stats-current-habit-data))))
+      (goto-char graph-start)
+      (delete-region graph-start graph-end)
+      (org-habit-stats-draw-graph org-habit-stats-current-habit-data))
+    (set-buffer-modified-p nil)))
 
 (defun org-habit-stats-refresh-calendar-section ()
   (let* ((cal-bounds org-habit-stats-calendar-bounds)
@@ -876,48 +915,51 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (save-excursion
       (goto-char cal-start)
       (delete-region cal-start cal-end)
-      (org-habit-stats-insert-calendar org-habit-stats-current-habit-data))))
+      (org-habit-stats-insert-calendar org-habit-stats-current-habit-data))
+    (set-buffer-modified-p nil)))
 
 ;;; Create org-habit-stats buffer
 (defun org-habit-stats--insert-divider ()
   (insert (make-string (max 80 (window-width)) org-agenda-block-separator))
   (insert (make-string 1 ?\n)))
-(defun org-habit-stats-create-habit-buffer (habit-title habit-data)
+
+(defun org-habit-stats-insert-section-header (name)
+  (insert (propertize name 'face 'org-habit-stats-section-name)
+          "\n"))
+
+(defun org-habit-stats-create-habit-buffer (habit-data habit-name habit-description)
   "Creates buffer displaying:
    - Calendar where days habit is done are marked
    - Graph of habit score or histogram of habit totals monthly/weekly
    - Various habit statistics"
   (setq org-habit-stats-current-habit-data habit-data)
   (let* ((buff (current-buffer))
-        (completed-history (nth 4 habit-data))
-        (full-history (org-habit-stats-get-full-history-new-to-old completed-history)))
+         (completed-history (nth 4 habit-data))
+         (full-history (org-habit-stats-get-full-history-new-to-old completed-history)))
     (switch-to-buffer (get-buffer-create org-habit-stats-buffer))
     (org-habit-stats-mode)
-    ;;; inject habit data
-    ;; (insert
-    ;;  (propertize "Run a mile\n" 'face 'bold))
-    ;; (insert "Score: 5\tCurrent Streak: 25\t Total Completions: 50\n")
-      ;; insert habit name
-  (insert (propertize habit-title 'face 'org-agenda-structure) "\n")
-  ;; insert habit repeat data, next due date
-  (insert (format "Repeats every %s%d days" (nth 5 habit-data) (nth 1 habit-data)) "\n")
-  (insert (org-format-time-string "Next Scheduled: %A, %B %d, %Y"
-                              (days-to-time (nth 0 habit-data))) "\n\n")
-  ;; TODO for format-time-string, must subtract 1970 from the year before
-  ;; write a function org-habit-stats--
+    (org-habit-stats-insert-habit-info habit-data habit-name habit-description)
+    ;; TODO for format-time-string, must subtract 1970 from the year before
+    ;; write a function org-habit-stats--
     (org-habit-stats--insert-divider)
-    (insert "Statistics" "\n\n")
-    (org-habit-stats-insert-stats habit-data full-history)
-    (org-habit-stats--insert-divider)
-    (insert "Days Completed")
-    (insert (make-string 2 ?\n))
-    ;;; create calendar
-    (org-habit-stats-make-calendar-buffer habit-data)
-    (org-habit-stats-insert-calendar habit-data)
-    (org-habit-stats--insert-divider)
-    (insert "Graph")
-    ;;; create graph
-    (org-habit-stats-draw-graph habit-data)
+    (if (= 0 (length completed-history))
+        (insert org-habit-stats-new-habit-message)
+      (org-habit-stats-insert-section-header "Statistics")
+      ;; (insert (make-string 1 ?\n))
+      (org-habit-stats-insert-stats habit-data full-history)
+      ;; (insert (make-string 1 ?\n))
+      (org-habit-stats--insert-divider)
+      (org-habit-stats-insert-section-header "Days Completed")
+      (insert (make-string 1 ?\n))
+;;; create calendar
+      (org-habit-stats-make-calendar-buffer habit-data)
+      (org-habit-stats-insert-calendar habit-data)
+      (org-habit-stats--insert-divider)
+      (org-habit-stats-insert-section-header "Graph")
+;;; create graph
+      (org-habit-stats-draw-graph habit-data)
+      )
+    (set-buffer-modified-p nil)
     ))
 
 ;;; Old functions
@@ -932,69 +974,8 @@ display to MAX, and sort lists with SORT-PRED if desired."
 ;;                          (t nil)))
 ;;    (lambda (m) (rassoc (nth 0 m) parse-time-months))))
 
-(defun org-habit-stats-update-score ()
-  (interactive)
-  (when (org-is-habit-p (point))
-    (let ((history (org-habit-stats-dates-to-binary
-                    (nth 4 (org-habit-parse-todo (point))))))
-      (org-set-property "SCORE"
-                        (number-to-string
-                         (org-habit-stats-exp-smoothing-list-score
-                          history)))
-      (org-set-property "STREAK"
-                        (number-to-string
-                         (org-habit-stats-streak
-                          history)))
-      (org-set-property "MONTHLY"
-                        (number-to-string
-                         (org-habit-stats-30-day-total
-                          history)))
-      (org-set-property "YEARLY"
-                        (number-to-string
-                         (org-habit-stats-365-day-total
-                          history))))))
 
 
-(defun org-habit-stats-number-to-string-maybe (x)
-  (cond ((integerp x) (format "%d" x))
-        ((floatp x) (format "%.5f" x))
-        (t x)))
-
-(defun org-habit-stats-update-score-2 ()
-  "Update score, streak, monthly, and yearly properties of a habit task
-   with the corresponding statistics, and update graph of habit score."
-  (interactive)
-  (when (org-is-habit-p (point))
-    (let ((history (org-habit-stats-dates-to-binary
-                                 (nth 4 (org-habit-parse-todo (point))))))
-      (mapcar (lambda (prop-func)
-                ;; (print (cdr prop-func))
-                (org-set-property (car prop-func)
-                                  (org-habit-stats-number-to-string-maybe
-                                   (funcall (cdr prop-func) history))))
-              '(("SCORE" . org-habit-stats-exp-smoothing-list-score)
-                ("CURRENT_STREAK" . org-habit-stats-streak)
-                ("MONTHLY" . org-habit-stats-30-day-total)
-                ("YEARLY" . org-habit-stats-365-day-total)
-                ("RECORD_STREAK" . org-habit-stats-record-streak-format)))
-      (org-habit-stats-update-graph history))))
-
-(defun org-habit-stats-format-property-name (s)
-  "Replace spaces with underscores in string S."
-  (replace-regexp-in-string "[[:space:]]" "_" s))
-(defun org-habit-stats-update-properties ()
-  (interactive)
-  (when (org-is-habit-p (point))
-    (let* ((habit-data (org-habit-parse-todo (point)))
-           (history (org-habit-stats-get-full-history-new-to-old (nth 4 habit-data)))
-           (statresults (org-habit-stats-calculate-stats habit-data history)))
-      (dolist (x statresults)
-        (org-set-property (cons x)
-                          (org-habit-stats-number-to-string-maybe (cdr x)))))))
-
-;; (add-hook 'org-after-todo-state-change-hook 'org-habit-stats-update-properties)
-;; (advice-add 'org-todo :after (lambda (x) (org-habit-stats-update-score-2)))
-(advice-add 'org-store-log-note :after 'org-habit-stats-update-properties)
 
 ;; Create temp gnu plot file
 
@@ -1031,72 +1012,43 @@ display to MAX, and sort lists with SORT-PRED if desired."
       (delete-file output-file)
       (kill-buffer gnuplot-buf)))
 
-(defun org-habit-stats--find-drawer-bounds (drawer-name)
-  "Finds and returns the start and end positions of the first
-   drawer of the current heading with name DRAWER-NAME."
-  (save-excursion
-  (let* ((heading-pos (progn (org-back-to-heading) (point)))
-         (graph-beg-pos (progn
-                          (search-forward-regexp (format ":%s:" drawer-name) nil t)
-                          (match-beginning 0)))
-         (graph-end-pos (search-forward ":END:"))
-         (graph-beg-pos-verify (progn
-                                 (search-backward-regexp ":GRAPH:" nil t)
-                                 (match-beginning 0)))
-         (heading-pos-verify (progn (org-back-to-heading) (point))))
-    (when (and heading-pos heading-pos-verify
-               graph-beg-pos graph-beg-pos-verify graph-end-pos)
-      (when (and (= heading-pos heading-pos-verify)
-                 (= graph-beg-pos graph-beg-pos-verify))
-        (cons graph-beg-pos graph-end-pos))))))
-(defun org-habit-stats--remove-drawer (drawer-name)
-  (let ((bounds (org-habit-stats--find-drawer-bounds drawer-name)))
-    (when bounds
-      (delete-region (car bounds) (cdr bounds))
-      t)))
-
-(defun org-habit-stats--skip-property-drawer ()
-  (let* ((property-pos (search-forward-regexp ":PROPERTIES:" nil t)))
-         (when property-pos
-           (search-forward-regexp ":END:")
-           (forward-line))))
-
-(defun org-habit-stats-insert-drawer (drawer-name drawer-contents)
-  "Inserts drawer DRAWER-NAME with contents DRAWER-CONTENTS.
-   It is placed after the property drawer if it exists."
-  (org-with-wide-buffer
-   (org-habit-stats--remove-drawer drawer-name)
-   (if (or (not (featurep 'org-inlinetask)) (org-inlinetask-in-task-p))
-       (org-back-to-heading-or-point-min t)
-     (org-with-limited-levels (org-back-to-heading-or-point-min t)))
-   (if (org-before-first-heading-p)
-       (while (and (org-at-comment-p) (bolp)) (forward-line))
-     (progn
-       (forward-line)
-       (when (looking-at-p org-planning-line-re) (forward-line))
-       (org-habit-stats--skip-property-drawer)))
-   (when (and (bolp) (> (point) (point-min))) (backward-char))
-   (let ((begin (if (bobp) (point) (1+ (point))))
-         (inhibit-read-only t))
-     (unless (bobp) (insert "\n"))
-     (insert (format ":%s:\n%s:END:" drawer-name drawer-contents))
-     (org-flag-region (line-end-position 0) (point) t 'outline)
-     (when (or (eobp) (= begin (point-min))) (insert "\n"))
-     (org-indent-region begin (point))
-     (org-hide-drawer-toggle))))
 
 
+;;; Set stats as properties
+(defun org-habit-stats-number-to-string-maybe (x)
+  (cond ((integerp x) (format "%d" x))
+        ((floatp x) (format "%.5f" x))
+        (t x)))
+
+(defun org-habit-stats-format-property-name (s)
+  "Replace spaces with underscores in string S."
+  (replace-regexp-in-string "[[:space:]]" "_" s))
+(defun org-habit-stats-update-properties ()
+  (interactive)
+  (when (org-is-habit-p (point))
+    (let* ((habit-data (org-habit-parse-todo (point)))
+           (history (org-habit-stats-get-full-history-new-to-old (nth 4 habit-data)))
+           (statresults (org-habit-stats-calculate-stats habit-data history)))
+      (dolist (x statresults)
+        (org-set-property (cons x)
+                          (org-habit-stats-number-to-string-maybe (cdr x)))))))
+
+;; (add-hook 'org-after-todo-state-change-hook 'org-habit-stats-update-properties)
+;; (advice-add 'org-todo :after (lambda (x) (org-habit-stats-update-score-2)))
+(advice-add 'org-store-log-note :after 'org-habit-stats-update-properties)
 
 ;;; org-habit-stats commands
 (defun org-habit-stats-view-habit-at-point ()
   (interactive)
-  (let ((habit-title (org-element-property :raw-value (org-element-at-point)))
-        (habit-data (org-habit-parse-todo (point))))
-    (org-habit-stats-create-habit-buffer habit-title habit-data)))
+  (let ((habit-name (org-element-property :raw-value (org-element-at-point)))
+        (habit-data (org-habit-parse-todo (point)))
+        (habit-description (org-entry-get (point) "DESCRIPTION")))
+    (org-habit-stats-create-habit-buffer habit-data habit-name habit-description)))
 
 (defun org-habit-stats-exit ()
   (interactive)
-  (kill-buffer org-habit-stats-calendar-buffer)
+  (if (bufferp org-habit-stats-calendar-buffer)
+      (kill-buffer org-habit-stats-calendar-buffer))
   (kill-buffer org-habit-stats-buffer))
 
 (defun org-habit-stats-test-1-make-buffer ()
