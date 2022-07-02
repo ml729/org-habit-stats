@@ -309,15 +309,16 @@ newest to oldest."
   (if (= (cdr (pop h)) 1)
       (1+ org-habit-stats--streak h)
     0))
-(defun org-habit-stats-streak (history &optional habit-data)
+
+(defun org-habit-stats-streak (history history-rev &optional habit-data)
   "Returns the current streak. If habit is completed today,
 include it. If not, begin counting current streak from
 yesterday."
-  (if (= (cdr (pop history)) 1)
-      (1+ (org-habit-stats-streak history))
-    (org-habit-stats-streak history)))
+  (if (= (cdr (pop history-rev)) 1)
+      (1+ (org-habit-stats-streak history-rev))
+    (org-habit-stats-streak history-rev)))
 
-(defun org-habit-stats--record-streak-full (history &optional habit-data)
+(defun org-habit-stats--record-streak-full (history history-rev &optional habit-data)
   "Returns (a b) where a is the record streak,
    b is the day the record streak occurred."
   (let ((record-streak 0)
@@ -325,8 +326,8 @@ yesterday."
         (curr-streak 0)
         (curr-streak-start 0)
         (curr-day 0))
-    (while history
-      (if (= (cdr (pop history)) 1)
+    (while history-rev
+      (if (= (cdr (pop history-rev)) 1)
           (progn
             (when (= curr-streak 0)
               (setq curr-streak-start curr-day))
@@ -344,43 +345,48 @@ yesterday."
                (split-string s " "))
    " "))
 
-(defun org-habit-stats-record-streak-format (history &optional habit-data)
-  (let* ((record-data (org-habit-stats--record-streak-full history habit-data))
+(defun org-habit-stats-record-streak-format (history history-rev habit-data)
+  (let* ((record-data (org-habit-stats--record-streak-full history-rev habit-data))
          (record-streak (car record-data))
          (record-day (cdr record-data)))
     (concat (number-to-string record-streak)
             ", on "
             (single-whitespace-only (org-agenda-format-date-aligned record-day)))))
 
-(defun org-habit-stats--N-day-total (history N)
-  (if (and (> N 0) history)
-      (if (= (cdr (pop history)) 1)
-          (1+ (org-habit-stats-N-day-total history (1- N)))
-        (org-habit-stats-N-day-total history (1- N)))
+(defun org-habit-stats-record-streak-days (history history-rev habit-data)
+  (car (org-habit-stats--record-streak-full history history-rev habit-data)))
+
+(defun org-habit-stats-record-streak-date (history history-rev habit-data)
+  (cdr (org-habit-stats--record-streak-full history history-rev habit-data)))
+
+(defun org-habit-stats--N-day-total (history history-rev N)
+  (if (and (> N 0) history-rev)
+      (if (= (cdr (pop history-rev)) 1)
+          (1+ (org-habit-stats--N-day-total history history-rev (1- N)))
+        (org-habit-stats--N-day-total history history-rev (1- N)))
     0))
-(defun org-habit-stats--N-day-percentage (history N habit-data)
+(defun org-habit-stats--N-day-percentage (history history-rev N habit-data)
   (let ((repeat-len (nth 1 habit-data)))
-  (/ (org-habit-stats-N-day-total history N) (/ (float N) repeat-len))))
+  (/ (org-habit-stats--N-day-total history history-rev N) (/ (float N) repeat-len))))
 
-(defun org-habit-stats-30-day-total (history &optional habit-data)
-  (org-habit-stats-N-day-percentage history 30))
+(defun org-habit-stats-30-day-total (history history-rev habit-data)
+  (org-habit-stats--N-day-percentage history history-rev 30))
 
-(defun org-habit-stats-365-day-total (history &optional habit-data)
-  (org-habit-stats-N-day-percentage history 365))
+(defun org-habit-stats-365-day-total (history history-rev habit-data)
+  (org-habit-stats--N-day-percentage history history-rev 365))
 
-(defun org-habit-stats-alltime-total (history habit-data)
+(defun org-habit-stats-alltime-total (history history-rev habit-data)
   (length (nth 4 habit-data)))
 
-(defun org-habit-stats-alltime-percentage (history habit-data)
+(defun org-habit-stats-alltime-percentage (history history-rev habit-data)
   (let ((repeat-len (nth 1 habit-data)))
   (/ (length (nth 4 habit-data)) (/ (float (length history)) repeat-len))))
 
-(defun org-habit-stats-exp-smoothing-list--full (history &optional habit-data)
+(defun org-habit-stats-exp-smoothing-list--full (history history-rev habit-data)
   "Returns score for a binary list HISTORY,
    computed via exponential smoothing. (Inspired by the open
    source Loop Habit Tracker app's score.)"
-  (let* ((history (reverse history))
-         (scores '(0))
+  (let* ((scores '(0))
          (freq 1.0)
          (alpha (expt 0.5 (/ (sqrt freq) 13))))
     (while history
@@ -388,8 +394,8 @@ yesterday."
                (* (- 1 alpha) (cdr (pop history)))) scores))
     (setq scores (mapcar (lambda (x) (* 100 x)) scores))
     scores))
-(defun org-habit-stats-exp-smoothing-list-score (history &optional habit-data)
-  (nth 0 (org-habit-stats-exp-smoothing-list--full history habit-data)))
+(defun org-habit-stats-exp-smoothing-list-score (history history-rev habit-data)
+  (nth 0 (org-habit-stats-exp-smoothing-list--full history history-rev habit-data)))
 
 (defun org-habit-stats-get-freq (seq &optional key-func value-func)
   "Return frequencies of elements in SEQ. If KEY-FUNC, use
@@ -404,12 +410,12 @@ https://stackoverflow.com/a/6050245"
     (maphash #'(lambda (k v) (push (cons k v) freqs)) h)
     freqs))
 
-(defun org-habit-stats-calculate-stats (habit-data full-history)
+(defun org-habit-stats-calculate-stats (history history-rev habit-data)
   (let ((statresults '()))
   (dolist (x org-habit-stats-stat-functions-alist)
     (let* ((statfunc (car x))
            (statname (cdr x))
-           (statresult (if (fboundp statfunc) (funcall statfunc full-history habit-data))))
+           (statresult (if (fboundp statfunc) (funcall statfunc history history-rev habit-data))))
       (when statresult
         (push (cons statname statresult) statresults))))
     (reverse statresults)))
@@ -547,12 +553,12 @@ second containing the corresponding counts per category."
    (mapcar (lambda (x) (cons (funcall format-func (car x)) (cdr x)))
            (sort (org-habit-stats-get-freq
                   (mapcar (lambda (x) (cons (funcall category-func (car x)) (cdr x)))
-                          (org-habit-stats-get-full-history-old-to-new history))
+                          history)
                   (lambda (x) (car x))
                   (lambda (x) (cdr x)))
                  (lambda (x y) (funcall predicate-func (car x) (car y)))))))
 
-(defun org-habit-stats-graph-completions-per-month (history)
+(defun org-habit-stats-graph-completions-per-month (history history-rev habit-data)
   "Returns a pair of lists (months . counts)."
   (org-habit-stats-graph-count-per-category
    history
@@ -563,16 +569,25 @@ second containing the corresponding counts per category."
                          (t nil)))
    (lambda (m) (car (rassoc (nth 0 m) org-habit-stats-months-names-alist)))))
 
-(defun org-habit-stats-graph-completions-per-week (history)
+(defun org-habit-stats--unix-from-absolute-time (abs-time)
+  (- abs-time (org-habit-stats-days-to-time (calendar-absolute-from-gregorian '(12 31 1969)))))
+
+(defun org-habit-stats-format-absolute-time-string (format-string &optional time zone)
+  (format-time-string format-string
+                      (org-habit-stats--unix-from-absolute-time time)
+                      zone))
+
+(defun org-habit-stats-graph-completions-per-week (history history-rev habit-data)
   "Returns a pair of lists (weeks . counts)."
   (org-habit-stats-graph-count-per-category
    history
    (lambda (d) (- d (mod d 7))) ;; converts absolute date to the sunday before or on; (month day year) format
    (lambda (d1 d2) (< d1 d2))
-   (lambda (d) (let ((time (days-to-time d)))
-                 (format-time-string org-habit-stats-graph-date-format time)))))
+   (lambda (d) (let ((time (org-habit-stats-days-to-time d)))
+                 (org-habit-stats-format-absolute-time-string org-habit-stats-graph-date-format
+                                     time)))))
 
-(defun org-habit-stats-graph-completions-per-weekday (history)
+(defun org-habit-stats-graph-completions-per-weekday (history history-rev habit-data)
   "Returns a pair of lists (weeks . counts)."
   (org-habit-stats-graph-count-per-category
    history
@@ -580,16 +595,15 @@ second containing the corresponding counts per category."
    (lambda (m1 m2) (< m1 m2))
    (lambda (m) (car (rassoc (1+ m) org-habit-stats-days-names-alist)))))
 
-(defun org-habit-stats-graph-daily-strength (history)
+(defun org-habit-stats-graph-daily-strength (history history-rev habit-data)
   "Returns a pair of lists (days . habit strengths)."
-  (let* ((full-history (org-habit-stats-get-full-history-new-to-old history))
-        (dayslst (mapcar (lambda (d) (format-time-string
+  (let* ((dayslst (mapcar (lambda (d) (org-habit-stats-format-absolute-time-string
                                    org-habit-stats-graph-date-format
-                                   (days-to-time (car d))))
-                        (reverse full-history))))
+                                   (org-habit-stats-days-to-time (car d))))
+                        history)))
      (cons dayslst
            (reverse (org-habit-stats-exp-smoothing-list--full
-                     full-history)))
+                     history history-rev habit-data)))
     )
   )
 
@@ -809,9 +823,8 @@ display to MAX, and sort lists with SORT-PRED if desired."
        'org-habit-stats-graph-name
        'org-habit-stats-graph-label))))
 
-(defun org-habit-stats-draw-graph (habit-data)
-  (let* ((history (nth 4 habit-data))
-         (graph-start (point))
+(defun org-habit-stats-draw-graph (history history-rev habit-data)
+  (let* ((graph-start (point))
          (func org-habit-stats-graph-current-func)
          (func-info (cdr (assoc func org-habit-stats-graph-functions-alist)))
          (graph-title (nth 1 func-info))
@@ -819,7 +832,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
          (y-name (nth 3 func-info))
          (dir (nth 4 func-info))
          (max-bars (nth 5 func-info))
-         (graph-data-names (funcall func history))
+         (graph-data-names (funcall func history history-rev habit-data))
          (graph-names (car graph-data-names))
          (graph-data (cdr graph-data-names)))
     (insert (make-string 3 ?\n))
@@ -841,6 +854,9 @@ display to MAX, and sort lists with SORT-PRED if desired."
   (org-habit-stats-refresh-graph-section))
 
 ;;; Insert sections
+(defun org-habit-stats-days-to-time (days)
+  "Convert number of days DAYS to number of seconds."
+  (* days 86400))
 (defun org-habit-stats-insert-habit-info (habit-data habit-name habit-description)
   (let ((habit-repeat-period (nth 1 habit-data))
         (habit-repeat-string (nth 5 habit-data))
@@ -853,8 +869,8 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (insert (format "Repeats every %s%d days"
                     habit-repeat-string habit-repeat-period)
             "\n")
-    (insert (org-format-time-string "Next Scheduled: %A, %B %d, %Y"
-                                    (days-to-time habit-next-scheduled))
+    (insert (org-habit-stats-format-absolute-time-string "Next Scheduled: %A, %B %d, %Y"
+                                                         (org-habit-stats-days-to-time habit-next-scheduled))
             "\n")
 
     ))
@@ -870,11 +886,11 @@ display to MAX, and sort lists with SORT-PRED if desired."
             (if (> numspaces 0)
                 (make-string numspaces 32)))))
 
-(defun org-habit-stats-insert-stats (habit-data full-history)
+(defun org-habit-stats-insert-stats (habit-data history history-rev)
   ;; insert habit stats
   (let* ((i 0)
          (stats-start (point))
-           (statresults (org-habit-stats-calculate-stats habit-data full-history)))
+           (statresults (org-habit-stats-calculate-stats history history-rev habit-data)))
       (dolist (x statresults)
         (insert (org-habit-stats-format-one-stat (car x)
                                                  (cdr x)))
@@ -901,11 +917,14 @@ display to MAX, and sort lists with SORT-PRED if desired."
 (defun org-habit-stats-refresh-graph-section ()
   (let* ((graph-bounds org-habit-stats-graph-bounds)
          (graph-start (car graph-bounds))
-         (graph-end (cdr graph-bounds)))
+         (graph-end (cdr graph-bounds))
+         (completed-days (nth 4 org-habit-stats-current-habit-data))
+         (history-rev (org-habit-stats-get-full-history-new-to-old completed-days))
+         (history (reverse history-rev)))
     (save-excursion
       (goto-char graph-start)
       (delete-region graph-start graph-end)
-      (org-habit-stats-draw-graph org-habit-stats-current-habit-data))
+      (org-habit-stats-draw-graph history history-rev org-habit-stats-current-habit-data))
     (set-buffer-modified-p nil)))
 
 (defun org-habit-stats-refresh-calendar-section ()
@@ -934,19 +953,19 @@ display to MAX, and sort lists with SORT-PRED if desired."
    - Various habit statistics"
   (setq org-habit-stats-current-habit-data habit-data)
   (let* ((buff (current-buffer))
-         (completed-history (nth 4 habit-data))
-         (full-history (org-habit-stats-get-full-history-new-to-old completed-history)))
+         (completed-days (nth 4 habit-data))
+         (history-rev (org-habit-stats-get-full-history-new-to-old completed-days))
+         (history (reverse history-rev)))
     (switch-to-buffer (get-buffer-create org-habit-stats-buffer))
     (org-habit-stats-mode)
     (org-habit-stats-insert-habit-info habit-data habit-name habit-description)
-    ;; TODO for format-time-string, must subtract 1970 from the year before
     ;; write a function org-habit-stats--
     (org-habit-stats--insert-divider)
-    (if (= 0 (length completed-history))
+    (if (= 0 (length completed-days))
         (insert org-habit-stats-new-habit-message)
       (org-habit-stats-insert-section-header "Statistics")
       ;; (insert (make-string 1 ?\n))
-      (org-habit-stats-insert-stats habit-data full-history)
+      (org-habit-stats-insert-stats habit-data history history-rev)
       ;; (insert (make-string 1 ?\n))
       (org-habit-stats--insert-divider)
       (org-habit-stats-insert-section-header "Days Completed")
@@ -957,7 +976,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
       (org-habit-stats--insert-divider)
       (org-habit-stats-insert-section-header "Graph")
 ;;; create graph
-      (org-habit-stats-draw-graph habit-data)
+      (org-habit-stats-draw-graph history history-rev habit-data)
       )
     (set-buffer-modified-p nil)
     ))
@@ -1023,12 +1042,14 @@ display to MAX, and sort lists with SORT-PRED if desired."
 (defun org-habit-stats-format-property-name (s)
   "Replace spaces with underscores in string S."
   (replace-regexp-in-string "[[:space:]]" "_" s))
+
 (defun org-habit-stats-update-properties ()
   (interactive)
   (when (org-is-habit-p (point))
     (let* ((habit-data (org-habit-parse-todo (point)))
-           (history (org-habit-stats-get-full-history-new-to-old (nth 4 habit-data)))
-           (statresults (org-habit-stats-calculate-stats habit-data history)))
+           (history-rev (org-habit-stats-get-full-history-new-to-old (nth 4 habit-data)))
+           (history (reverse history-rev))
+           (statresults (org-habit-stats-calculate-stats history history-rev habit-data)))
       (dolist (x statresults)
         (org-set-property (cons x)
                           (org-habit-stats-number-to-string-maybe (cdr x)))))))
