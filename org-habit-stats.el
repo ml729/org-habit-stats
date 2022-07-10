@@ -1051,10 +1051,10 @@ display to MAX, and sort lists with SORT-PRED if desired."
            (history (reverse history-rev))
            (statresults (org-habit-stats-calculate-stats history history-rev habit-data)))
       (dolist (x statresults)
-        (org-set-property (cons x)
+        (org-set-property (org-habit-stats-format-property-name (car x))
                           (org-habit-stats-number-to-string-maybe (cdr x)))))))
 
-;; (add-hook 'org-after-todo-state-change-hook 'org-habit-stats-update-properties)
+(add-hook 'org-after-todo-state-change-hook 'org-habit-stats-update-properties)
 ;; (advice-add 'org-todo :after (lambda (x) (org-habit-stats-update-score-2)))
 (advice-add 'org-store-log-note :after 'org-habit-stats-update-properties)
 
