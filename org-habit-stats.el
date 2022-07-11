@@ -31,6 +31,12 @@
   :prefix "org-habit-stats-")
 
 ;;; Defcustoms
+(defcustom org-habit-stats-include-uncompleted-today nil
+  "If a habit is uncompleted today, whether or not to include
+today in statistics."
+  :group 'org-habit-stats
+  :type 'boolean)
+
 (defcustom org-habit-stats-insert-graph-in-file t
   "Whether or not to insert ascii graph of habit scores in file."
   :group 'org-habit-stats
@@ -127,12 +133,16 @@ chart-face-color-list is unaffected.")
     ("Sat" . 7))
   "Day names used in graphs.")
 
+(defcustom org-habit-stats-stat-date-format
+  "%F"
+  "Date format used in graphs for dates in stats.")
 (defcustom org-habit-stats-graph-date-format
   "%m/%d"
   "Date format used in graphs for dates in graphs.")
 
 (defcustom org-habit-stats-stat-functions-alist
-  '((org-habit-stats-exp-smoothing-list-score . "Strength")
+  '((org-habit-stats-exp-smoothing-list-today . "Strength")
+    (org-habit-stats-streak . "Current Streak")
      ;; (org-habit-stats-present-streak . "Current-Streak")
      ;; (org-habit-stats-present-unstreak . "Current Unstreak")
      ;; org-habit-stats-recent-unstreak
@@ -144,13 +154,33 @@ functions take in the original parsed habit data (outputted by
 org-habit-parse-todo) and the full habit history (outputted by
 org-habit-stats-get-full-history-new-to-old)")
 
+(defcustom org-habit-stats-exp-smoothing-alpha 0)
+(defcustom org-habit-stats-exp-smoothing-beta 0)
+
+(setq org-habit-stats-stat-functions-alist
+
+      '((org-habit-stats-exp-smoothing-list-today . "Strength")
+        (org-habit-stats-streak . "Current Streak")
+        (org-habit-stats-record-streak-days . "Record Streak")
+        (org-habit-stats-record-streak-date . "Record Date")
+        (org-habit-stats-unstreak . "Unstreak")
+        (org-habit-stats-30-day-total "30 day total")
+        (org-habit-stats-30-day-percentage "30 day percentage")
+        ;; (org-habit-stats-present-streak . "Current-Streak")
+        ;; (org-habit-stats-present-unstreak . "Current Unstreak")
+        ;; org-habit-stats-recent-unstreak
+        ;; (org-habit-stats-record-streak . "Record Streak")
+        (org-habit-stats-alltime-total . "Total Completions")
+        (org-habit-stats-alltime-percentage . "Total Percentage"))
+      )
+
 (defcustom org-habit-stats-graph-functions-alist
   '((org-habit-stats-graph-completions-per-month . ("m"
-                                                   "Monthly Completions"
-                                                   "Months"
-                                                   "Completions"
-                                                   vertical
-                                                   5))
+                                                    "Monthly Completions"
+                                                    "Months"
+                                                    "Completions"
+                                                    vertical
+                                                    5))
     (org-habit-stats-graph-completions-per-week . ("w"
                                                    "Weekly Completions"
                                                    "Weeks"
@@ -158,11 +188,11 @@ org-habit-stats-get-full-history-new-to-old)")
                                                    vertical
                                                    10))
     (org-habit-stats-graph-completions-per-weekday . ("d"
-                                                   "Completions by Day"
-                                                   "Day"
-                                                   "Completions"
-                                                   vertical
-                                                   7))
+                                                      "Completions by Day"
+                                                      "Day"
+                                                      "Completions"
+                                                      vertical
+                                                      7))
     (org-habit-stats-graph-daily-strength . ("s"
                                              "Daily Habit Strength"
                                              "Day"
@@ -177,6 +207,10 @@ max number of bars to show at a time.")
 (defcustom org-habit-stats-graph-default-func 'org-habit-stats-graph-completions-per-week
   "Current graph function used in org habit stats buffer.")
 
+(defcustom org-habit-stats-show-blank-when-new-habit t
+  "Whether to display blank screen with new habit message for a habit with
+0 completions logged.")
+(setq org-habit-stats-show-blank-when-new-habit nil)
 (defcustom org-habit-stats-new-habit-message "A new habit."
   "Message to display when habit has 0 completions logged.")
 
@@ -287,57 +321,74 @@ newest to oldest."
 ;;     (if (> (- (car history) day) 1)
 ;;         (dotimes i (1- (-))
 ;;                  )))))
+
 (defun org-habit-stats-get-full-history-new-to-old (history)
-  (let* ((today (org-today))
-         (history (add-to-list 'history (1+ today)))
-         (bin-hist nil))
+  "Return the full history from HISTORY (list of completed dates),
+ from new to old, as a list where each element is a pair of the
+form (date . 0 or 1). If today is marked completed, it is
+included in the history. If today is not marked completed, it is
+included in the history if and only if
+`org-habit-stats-include-uncompleted-today` is t."
+  (let ((today (org-today))
+        (bin-hist nil))
+    (add-to-list 'history (1+ today) t)
     (seq-reduce
      (lambda (a b)
        (push (cons a 1) bin-hist)
        (setq a (1+ a))
        (while (< a b)
-         (push (cons a 0) bin-hist)
+         (if (= a today)
+             (if org-habit-stats-include-uncompleted-today
+                 (push (cons a 0) bin-hist))
+           (push (cons a 0) bin-hist))
          (setq a (1+ a)))
        b)
-     history
+     (cdr history)
      (car history))
     bin-hist))
+
 (defun org-habit-stats-get-full-history-old-to-new (history)
   (reverse (org-habit-stats-get-full-history-new-to-old history)))
 
 (defun org-habit-stats--streak (h)
-  (if (= (cdr (pop h)) 1)
-      (1+ org-habit-stats--streak h)
+  (if (and h (= (cdr (pop h)) 1))
+      (1+ (org-habit-stats--streak h))
     0))
 
 (defun org-habit-stats-streak (history history-rev &optional habit-data)
-  "Returns the current streak. If habit is completed today,
-include it. If not, begin counting current streak from
-yesterday."
-  (if (= (cdr (pop history-rev)) 1)
-      (1+ (org-habit-stats-streak history-rev))
-    (org-habit-stats-streak history-rev)))
+  "Returns the current streak."
+  (org-habit-stats--streak history-rev))
+
+(defun org-habit-stats--unstreak (h)
+  (if (and h (= (cdr (pop h)) 0))
+      (1+ (org-habit-stats--unstreak h))
+    0))
+(defun org-habit-stats-unstreak (history history-rev &optional habit-data)
+  "Returns the current unstreak (number of consecutive days missed). If there is no
+history, returns 0."
+  (org-habit-stats--unstreak history-rev))
 
 (defun org-habit-stats--record-streak-full (history history-rev &optional habit-data)
-  "Returns (a b) where a is the record streak,
+  "Returns (a . b) where a is the record streak,
    b is the day the record streak occurred."
   (let ((record-streak 0)
-        (record-day 0)
+        (record-day (org-today))
         (curr-streak 0)
-        (curr-streak-start 0)
-        (curr-day 0))
+        (curr-streak-start 0))
     (while history-rev
-      (if (= (cdr (pop history-rev)) 1)
-          (progn
-            (when (= curr-streak 0)
-              (setq curr-streak-start curr-day))
-            (setq curr-streak (1+ curr-streak)))
-        (setq curr-streak 0))
-      (when (> curr-streak record-streak)
-        (setq record-streak curr-streak)
-        (setq record-day curr-streak-start))
-      (setq curr-day (1+ curr-day)))
-    (cons record-streak (org-date-to-gregorian (- (org-today) record-day)))))
+      (let* ((next-pair (pop history-rev))
+             (curr-day (car next-pair))
+             (curr-completed (cdr next-pair)))
+        (if (= curr-completed 1)
+            (progn
+              (when (= curr-streak 0)
+                (setq curr-streak-start curr-day))
+              (setq curr-streak (1+ curr-streak)))
+          (setq curr-streak 0))
+        (when (> curr-streak record-streak)
+          (setq record-streak curr-streak)
+          (setq record-day curr-streak-start))))
+    (cons record-streak record-day)))
 
 (defun single-whitespace-only (s)
   (string-join
@@ -357,7 +408,9 @@ yesterday."
   (car (org-habit-stats--record-streak-full history history-rev habit-data)))
 
 (defun org-habit-stats-record-streak-date (history history-rev habit-data)
-  (cdr (org-habit-stats--record-streak-full history history-rev habit-data)))
+  (org-habit-stats-format-absolute-day-string
+   org-habit-stats-stat-date-format
+   (cdr (org-habit-stats--record-streak-full history history-rev habit-data))))
 
 (defun org-habit-stats--N-day-total (history history-rev N)
   (if (and (> N 0) history-rev)
@@ -365,22 +418,33 @@ yesterday."
           (1+ (org-habit-stats--N-day-total history history-rev (1- N)))
         (org-habit-stats--N-day-total history history-rev (1- N)))
     0))
-(defun org-habit-stats--N-day-percentage (history history-rev N habit-data)
+(defun org-habit-stats--N-day-percentage (history history-rev habit-data N)
   (let ((repeat-len (nth 1 habit-data)))
   (/ (org-habit-stats--N-day-total history history-rev N) (/ (float N) repeat-len))))
 
+(defun org-habit-stats-30-day-percentage (history history-rev habit-data)
+  (org-habit-stats--N-day-percentage history history-rev habit-data 30))
+
+(defun org-habit-stats-365-day-percentage (history history-rev habit-data)
+  (org-habit-stats--N-day-percentage history history-rev habit-data 365))
+
+(defun org-habit-stats-alltime-percentage (history history-rev habit-data)
+  (let* ((repeat-len (nth 1 habit-data))
+        (numerator (org-habit-stats-alltime-total history history-rev habit-data))
+        (denominator (/ (float (length history)) repeat-len)))
+    (if (= denominator 0)
+        0
+      (/ numerator denominator))))
+
 (defun org-habit-stats-30-day-total (history history-rev habit-data)
-  (org-habit-stats--N-day-percentage history history-rev 30))
+  (org-habit-stats--N-day-total history history-rev 30))
 
 (defun org-habit-stats-365-day-total (history history-rev habit-data)
-  (org-habit-stats--N-day-percentage history history-rev 365))
+  (org-habit-stats--N-day-total history history-rev 365))
 
 (defun org-habit-stats-alltime-total (history history-rev habit-data)
   (length (nth 4 habit-data)))
 
-(defun org-habit-stats-alltime-percentage (history history-rev habit-data)
-  (let ((repeat-len (nth 1 habit-data)))
-  (/ (length (nth 4 habit-data)) (/ (float (length history)) repeat-len))))
 
 (defun org-habit-stats-exp-smoothing-list--full (history history-rev habit-data)
   "Returns score for a binary list HISTORY,
@@ -394,8 +458,8 @@ yesterday."
                (* (- 1 alpha) (cdr (pop history)))) scores))
     (setq scores (mapcar (lambda (x) (* 100 x)) scores))
     scores))
-(defun org-habit-stats-exp-smoothing-list-score (history history-rev habit-data)
-  (nth 0 (org-habit-stats-exp-smoothing-list--full history history-rev habit-data)))
+(defun org-habit-stats-exp-smoothing-list-today (history history-rev habit-data)
+  (car (org-habit-stats-exp-smoothing-list--full history history-rev habit-data)))
 
 (defun org-habit-stats-get-freq (seq &optional key-func value-func)
   "Return frequencies of elements in SEQ. If KEY-FUNC, use
@@ -576,6 +640,11 @@ second containing the corresponding counts per category."
   (format-time-string format-string
                       (org-habit-stats--unix-from-absolute-time time)
                       zone))
+
+(defun org-habit-stats-format-absolute-day-string (format-string &optional day zone)
+  (org-habit-stats-format-absolute-time-string format-string
+                                               (org-habit-stats-days-to-time day)
+                                               zone))
 
 (defun org-habit-stats-graph-completions-per-week (history history-rev habit-data)
   "Returns a pair of lists (weeks . counts)."
@@ -961,7 +1030,8 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (org-habit-stats-insert-habit-info habit-data habit-name habit-description)
     ;; write a function org-habit-stats--
     (org-habit-stats--insert-divider)
-    (if (= 0 (length completed-days))
+    (if (and org-habit-stats-show-blank-when-new-habit
+             (= 0 (length completed-days)))
         (insert org-habit-stats-new-habit-message)
       (org-habit-stats-insert-section-header "Statistics")
       ;; (insert (make-string 1 ?\n))
