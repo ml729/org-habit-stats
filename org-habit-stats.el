@@ -161,9 +161,9 @@ functions take in the original parsed habit data (outputted by
 org-habit-parse-todo) and the full habit history (outputted by
 org-habit-stats-get-full-history-new-to-old)")
 
-(defcustom org-habit-stats-exp-smoothing-alpha 0
+(defcustom org-habit-stats-exp-smoothing-alpha 0.052
   "Weight of completed days for exponential smoothing.")
-(defcustom org-habit-stats-exp-smoothing-beta 0
+(defcustom org-habit-stats-exp-smoothing-beta 0.10
   "Weight of missed days for exponential smoothing.")
 
 (setq org-habit-stats-stat-functions-alist
@@ -461,21 +461,35 @@ history, returns 0."
 (defun org-habit-stats-alltime-total (history history-rev habit-data)
   (length (nth 4 habit-data)))
 
-
 (defun org-habit-stats--exp-smoothing-list-full (history history-rev habit-data)
-  "Returns score for a binary list HISTORY,
-   computed via exponential smoothing. (Inspired by the open
-   source Loop Habit Tracker app's score.)"
-  (let* ((scores '(0))
-         (freq 1.0)
-         (alpha (expt 0.5 (/ (sqrt freq) 13))))
-    (while history
-      (push (+ (* alpha (nth 0 scores))
-               (* (- 1 alpha) (cdr (pop history)))) scores))
-    (setq scores (mapcar (lambda (x) (* 100 x)) scores))
-    scores))
+  "Returns score for a binary list HISTORY, computed via
+   exponential smoothing. (Inspired by the GPLv3 Loop Habit
+   Tracker app's score.)"
+  (if (not history) nil
+    (let* ((scores '())
+           (alpha org-habit-stats-exp-smoothing-alpha)
+           (beta org-habit-stats-exp-smoothing-beta))
+      (while history
+        (let* ((completed (cdr (pop history)))
+               (coeff (if (= completed 1) alpha beta))
+               (prev-score (if scores (car scores) 0)))
+          (push (+ (* (- 1 coeff) prev-score)
+                   (* coeff completed)) scores)))
+      ;; (print scores)
+      (mapcar (lambda (x) (* 100 x)) scores)
+      )))
+
 (defun org-habit-stats-exp-smoothing-list-today (history history-rev habit-data)
-  (car (org-habit-stats--exp-smoothing-list-full history history-rev habit-data)))
+  (if (not history) 0
+    (car (org-habit-stats--exp-smoothing-list-full
+          history history-rev habit-data))))
+
+(defun org-habit-stats-comeback-count (history history-rev habit-data)
+  "Return the number of comebacks. If there are no comebacks, return nil.
+A comeback is defined as: when you recover your previous record streak.
+"
+  )
+
 
 (defun org-habit-stats-get-freq (seq &optional key-func value-func)
   "Return frequencies of elements in SEQ. If KEY-FUNC, use
@@ -809,29 +823,33 @@ If ALIGN-LEFT non-nil, it is aligned left."
 (defun org-habit-stats-chart-draw-values (c)
   "Display the values on an already drawn bar chart C."
   (let* ((data (oref c sequences))
-	 (dir (oref c direction))
-	 (odir (if (eq dir 'vertical) 'horizontal 'vertical)))
+         (dir (oref c direction))
+         (odir (if (eq dir 'vertical) 'horizontal 'vertical)))
     (while data
       (if (stringp (car (oref (car data) data)))
-	  ;; skip string lists...
-	  nil
-	;; display number lists...
-	(let ((i 0)
-	      (seq (oref (car data) data)))
-	  (while seq
-	    (let* ((rng (chart-translate-namezone c i))
-		   (dp (if (eq dir 'vertical)
-			   (chart-translate-ypos c (car seq))
-			 (chart-translate-xpos c (car seq))))
-		  (zp (if (eq dir 'vertical)
-			  (chart-translate-ypos c 0)
-			(chart-translate-xpos c 0))))
-	      (if (= (car rng) (cdr rng)) nil
-                    (chart-display-label (int-to-string (car seq))
-   odir (1- dp) (car rng) (cdr rng))
-                )
-	    (setq i (1+ i)
-		  seq (cdr seq))))))
+          ;; skip string lists...
+          nil
+        ;; display number lists...
+        (let ((i 0)
+              (seq (oref (car data) data)))
+          (while seq
+            (let* ((rng (chart-translate-namezone c i))
+                   (dp (if (eq dir 'vertical)
+                           (chart-translate-ypos c (car seq))
+                         (chart-translate-xpos c (car seq))))
+                   (zp (if (eq dir 'vertical)
+                           (chart-translate-ypos c 0)
+                         (chart-translate-xpos c 0)))
+                   (val (car seq))
+                   (val-str
+                    (cond ((integerp val) (format "%d" val))
+                          ((floatp val) (format "%.1f" val))
+                          (t val))))
+              (if (= (car rng) (cdr rng)) nil
+                (chart-display-label
+                 val-str odir (1- dp) (car rng) (cdr rng)))
+              (setq i (1+ i)
+                    seq (cdr seq))))))
       (setq data (cdr data)))))
 
 (defun org-habit-stats-chart-draw (c &optional buff)
@@ -859,6 +877,8 @@ Begins at line LINE."
 
 
 (defun org-habit-stats--chart-trim-offset (seq max offset end)
+  (if (> (+ offset max) (length seq))
+      (setq org-habit-stats-graph-current-offset (- (length seq) max)))
   (let* ((newbeg (min offset (- (length seq) max)))
          (newend (min (+ offset max) (length seq))))
     (if (>= newbeg 0)
@@ -878,9 +898,9 @@ end of the sequence instead."
                 (oref c y-axis) (oref c x-axis))))
     (dolist (x s)
       (oset x data (org-habit-stats--chart-trim-offset
-                    (oref x data) max offset end))
+                    (oref x data) max offset end)))
       (oset nx items (org-habit-stats--chart-trim-offset
-                      (oref nx items) max offset end)))))
+                      (oref nx items) max offset end))))
 
 (defun org-habit-stats-chart-bar-quickie-extended (dir title namelst nametitle numlst numtitle
                                                        &optional max sort-pred offset end width height
@@ -1002,6 +1022,28 @@ display to MAX, and sort lists with SORT-PRED if desired."
   (setq org-habit-stats-graph-current-offset 0)
   (org-habit-stats-refresh-graph-section))
 
+
+(defun org-habit-stats--scroll-graph (n)
+  (setq org-habit-stats-graph-current-offset
+        (+ n org-habit-stats-graph-current-offset))
+  (org-habit-stats-refresh-graph-section))
+
+(defun org-habit-stats-scroll-graph-left ()
+  (interactive)
+  (org-habit-stats--scroll-graph 2))
+(defun org-habit-stats-scroll-graph-right ()
+  (interactive)
+  (if (> org-habit-stats-graph-current-offset 0)
+      (org-habit-stats--scroll-graph -2)))
+
+(defun org-habit-stats-scroll-graph-left-big ()
+  (interactive)
+  (org-habit-stats--scroll-graph 7))
+(defun org-habit-stats-scroll-graph-right-big ()
+  (interactive)
+  (if (> org-habit-stats-graph-current-offset 0)
+      (org-habit-stats--scroll-graph -7)))
+
 ;;; Insert sections
 (defun org-habit-stats-days-to-time (days)
   "Convert number of days DAYS to number of seconds."
@@ -1026,7 +1068,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
 
 (defun org-habit-stats-format-one-stat (statname statdata)
   (let* ((fdata (cond ((integerp statdata) (format "%d" statdata))
-                      ((floatp statdata) (format "%.3f" statdata))
+                      ((floatp statdata) (format "%.2f" statdata))
                       (t statdata)))
          (numspaces (- 39 (+ (length statname) (length fdata)))))
     (concat (propertize statname 'face 'org-habit-stats-stat-name)
@@ -1246,6 +1288,10 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (define-key map "M-v"   'org-habit-stats-calendar-scroll-right-three-months)
     (define-key map "C-x ]"   'org-habit-stats-calendar-forward-year)
     (define-key map "C-x ["   'org-habit-stats-calendar-backward-year)
+    (define-key map "[" 'org-habit-stats-scroll-graph-left)
+    (define-key map "]" 'org-habit-stats-scroll-graph-right)
+    (define-key map "{" 'org-habit-stats-scroll-graph-left-big)
+    (define-key map "}" 'org-habit-stats-scroll-graph-right-big)
     (dolist (x org-habit-stats-graph-functions-alist)
       (let* ((graph-func (car x))
              (graph-key (cadr x))
@@ -1277,57 +1323,57 @@ display to MAX, and sort lists with SORT-PRED if desired."
 
 
 
-(cl-defmethod chart-draw-data ((c chart-bar))
-  "Display the data available in a bar chart C."
-  (let* ((data (oref c sequences))
-	 (dir (oref c direction))
-	 (odir (if (eq dir 'vertical) 'horizontal 'vertical))
-         (faces
-          (if (functionp chart-face-list)
-              (funcall chart-face-list)
-            chart-face-list)))
-    (while data
-      (if (stringp (car (oref (car data) data)))
-	  ;; skip string lists...
-	  nil
-	;; display number lists...
-	(let ((i 0)
-	      (seq (oref (car data) data)))
-	  (while seq
-	    (let* ((rng (chart-translate-namezone c i))
-		   (dp (if (eq dir 'vertical)
-			   (chart-translate-ypos c (car seq))
-			 (chart-translate-xpos c (car seq))))
-		  (zp (if (eq dir 'vertical)
-			  (chart-translate-ypos c 0)
-			(chart-translate-xpos c 0)))
-		  (fc (if faces
-			  (nth (% i (length faces)) faces)
-			'default)))
-	      (if (< dp zp)
-		  (progn
-		    (chart-draw-line dir (car rng) dp zp)
-		    (chart-draw-line dir (cdr rng) dp zp)
-                    )
-		(chart-draw-line dir (car rng) zp (1+ dp))
-                (chart-draw-line dir (cdr rng) zp (1+ dp))
-                )
-	      (if (= (car rng) (cdr rng)) nil
-		(chart-draw-line odir dp (1+ (car rng)) (cdr rng))
-		(chart-draw-line odir zp (car rng) (1+ (cdr rng)))
-                    ;; (chart-display-label (int-to-string (car seq))
-   ;; odir (1- dp) (car rng) (cdr rng))
-                )
-	      (if (< dp zp)
-		  (chart-deface-rectangle dir rng (cons dp zp) fc)
-		(chart-deface-rectangle dir rng (cons zp dp) fc))
-	      )
-	    ;; find the bounds, and chart it!
-	    ;; for now, only do one!
-	    (setq i (1+ i)
-		  seq (cdr seq)))))
-      (setq data (cdr data))))
-  )
+;; (cl-defmethod chart-draw-data ((c chart-bar))
+;;   "Display the data available in a bar chart C."
+;;   (let* ((data (oref c sequences))
+;; 	 (dir (oref c direction))
+;; 	 (odir (if (eq dir 'vertical) 'horizontal 'vertical))
+;;          (faces
+;;           (if (functionp chart-face-list)
+;;               (funcall chart-face-list)
+;;             chart-face-list)))
+;;     (while data
+;;       (if (stringp (car (oref (car data) data)))
+;; 	  ;; skip string lists...
+;; 	  nil
+;; 	;; display number lists...
+;; 	(let ((i 0)
+;; 	      (seq (oref (car data) data)))
+;; 	  (while seq
+;; 	    (let* ((rng (chart-translate-namezone c i))
+;; 		   (dp (if (eq dir 'vertical)
+;; 			   (chart-translate-ypos c (car seq))
+;; 			 (chart-translate-xpos c (car seq))))
+;; 		  (zp (if (eq dir 'vertical)
+;; 			  (chart-translate-ypos c 0)
+;; 			(chart-translate-xpos c 0)))
+;; 		  (fc (if faces
+;; 			  (nth (% i (length faces)) faces)
+;; 			'default)))
+;; 	      (if (< dp zp)
+;; 		  (progn
+;; 		    (chart-draw-line dir (car rng) dp zp)
+;; 		    (chart-draw-line dir (cdr rng) dp zp)
+;;                     )
+;; 		(chart-draw-line dir (car rng) zp (1+ dp))
+;;                 (chart-draw-line dir (cdr rng) zp (1+ dp))
+;;                 )
+;; 	      (if (= (car rng) (cdr rng)) nil
+;; 		(chart-draw-line odir dp (1+ (car rng)) (cdr rng))
+;; 		(chart-draw-line odir zp (car rng) (1+ (cdr rng)))
+;;                     ;; (chart-display-label (int-to-string (car seq))
+;;    ;; odir (1- dp) (car rng) (cdr rng))
+;;                 )
+;; 	      (if (< dp zp)
+;; 		  (chart-deface-rectangle dir rng (cons dp zp) fc)
+;; 		(chart-deface-rectangle dir rng (cons zp dp) fc))
+;; 	      )
+;; 	    ;; find the bounds, and chart it!
+;; 	    ;; for now, only do one!
+;; 	    (setq i (1+ i)
+;; 		  seq (cdr seq)))))
+;;       (setq data (cdr data))))
+;;   )
 
 
 (provide 'org-habit-stats)
