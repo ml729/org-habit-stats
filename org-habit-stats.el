@@ -148,16 +148,19 @@ chart-face-color-list is unaffected.")
   "Date format used in graphs for dates in graphs.")
 
 (defcustom org-habit-stats-stat-functions-alist
-  '((org-habit-stats-exp-smoothing-list-today . "Strength")
-    (org-habit-stats-streak . "Current Streak")
-     ;; (org-habit-stats-present-streak . "Current-Streak")
-     ;; (org-habit-stats-present-unstreak . "Current Unstreak")
-     ;; org-habit-stats-recent-unstreak
-     ;; (org-habit-stats-record-streak . "Record Streak")
-     (org-habit-stats-alltime-total . "Total Completions")
-     (org-habit-stats-alltime-percentage . "Total Percentage"))
-  "Alist mapping stat functions to their names. All stat
-functions take in the original parsed habit data (outputted by
+  '((org-habit-stats-streak . ("Current Streak" t org-habit-stats-streak-message))
+    (org-habit-stats-exp-smoothing-list-today . ("Habit Strength" t))
+    (org-habit-stats-record-streak-days . ("Record Streak" t))
+    (org-habit-stats-record-streak-date . ("Record Date" t))
+    (org-habit-stats-unstreak . ("Unstreak" nil))
+    (org-habit-stats-30-day-total . ("30 day total" t))
+    (org-habit-stats-30-day-percentage . ("30 day percentage" t))
+    (org-habit-stats-alltime-total . ("Total Completions" t))
+    (org-habit-stats-alltime-percentage . ("Total Percentage" t)))
+
+  "Alist mapping stat functions to a list of their names,
+visibility, and optional message function. All stat functions
+take in the original parsed habit data (outputted by
 org-habit-parse-todo) and the full habit history (outputted by
 org-habit-stats-get-full-history-new-to-old)")
 
@@ -166,23 +169,6 @@ org-habit-stats-get-full-history-new-to-old)")
 (defcustom org-habit-stats-exp-smoothing-beta 0.10
   "Weight of missed days for exponential smoothing.")
 
-(setq org-habit-stats-stat-functions-alist
-
-      '(
-        (org-habit-stats-streak . "Current Streak")
-        (org-habit-stats-exp-smoothing-list-today . "Habit Strength")
-        (org-habit-stats-record-streak-days . "Record Streak")
-        (org-habit-stats-record-streak-date . "Record Date")
-        (org-habit-stats-unstreak . "Unstreak")
-        (org-habit-stats-30-day-total . "30 day total")
-        (org-habit-stats-30-day-percentage . "30 day percentage")
-        ;; (org-habit-stats-present-streak . "Current-Streak")
-        ;; (org-habit-stats-present-unstreak . "Current Unstreak")
-        ;; org-habit-stats-recent-unstreak
-        ;; (org-habit-stats-record-streak . "Record Streak")
-        (org-habit-stats-alltime-total . "Total Completions")
-        (org-habit-stats-alltime-percentage . "Total Percentage"))
-      )
 
 (defcustom org-habit-stats-graph-functions-alist
   '((org-habit-stats-graph-completions-per-month . ("m"
@@ -476,8 +462,8 @@ history, returns 0."
           (push (+ (* (- 1 coeff) prev-score)
                    (* coeff completed)) scores)))
       ;; (print scores)
-      (mapcar (lambda (x) (* 100 x)) scores)
-      )))
+      (mapcar (lambda (x) (* 100 x)) scores))))
+
 
 (defun org-habit-stats-exp-smoothing-list-today (history history-rev habit-data)
   (if (not history) 0
@@ -505,18 +491,43 @@ https://stackoverflow.com/a/6050245"
     freqs))
 
 (defun org-habit-stats-calculate-stats (history history-rev habit-data)
-  (let ((statresults '()))
+  (let ((statresults '())
+        (statmessages '()))
   (dolist (x org-habit-stats-stat-functions-alist)
     (let* ((statfunc (car x))
-           (statname (cdr x))
-           (statresult (if (fboundp statfunc) (funcall statfunc history history-rev habit-data))))
-      (when statresult
-        (push (cons statname statresult) statresults))))
-    (reverse statresults)))
+           (statname (nth 0 (cdr x)))
+           (statvisible (nth 1 (cdr x)))
+           (statmessagefunc (nth 2 (cdr x)))
+           (statresult (if (fboundp statfunc) (funcall statfunc history history-rev habit-data)))
+           (statmessage (if (and statresult (fboundp statmessagefunc))
+                            (funcall statmessagefunc statresult))))
+      (when (and statvisible statresult)
+        (push (cons statname statresult) statresults))
+      (when statmessage
+        (push statmessage statmessages))))
+    (cons (reverse statresults) statmessages)))
 
 (defun org-habit-stats-transpose-pair-list (a)
   (cons (mapcar 'car a) (mapcar 'cdr a)))
 
+;;; Message functions
+
+(defun org-habit-stats-streak-message (n)
+  (alist-get n org-habit-stats-streak-message-alist))
+
+(defun org-habit-stats-unstreak-message (n)
+  (alist-get n org-habit-stats-unstreak-message-alist))
+
+(defun org-habit-stats-strength-message (n)
+  (alist-get n org-habit-stats-strength-message-alist))
+
+(defun org-habit-stats-comeback-message (history history-rev habit-data)
+  (pcase-let ((`(,record-streak . ,record-day)
+               (org-habit-stats--record-streak-full history history-rev habit-data))
+              curr-streak (org-habit-stats-streak history history-rev habit-data))
+    (if (and (not (= (org-today) record-day))
+             (= record-streak curr-streak))
+        "Record streak recovered.")))
 
 ;;; Calendar functions
 
@@ -1081,7 +1092,9 @@ display to MAX, and sort lists with SORT-PRED if desired."
   ;; insert habit stats
   (let* ((i 0)
          (stats-start (point))
-           (statresults (org-habit-stats-calculate-stats history history-rev habit-data)))
+         (statresultsmessages (org-habit-stats-calculate-stats history history-rev habit-data))
+         (statresults (car statresultsmessages))
+         (statmessages (cdr statresultsmessages)))
       (dolist (x statresults)
         (insert (org-habit-stats-format-one-stat (car x)
                                                  (cdr x)))
@@ -1089,7 +1102,10 @@ display to MAX, and sort lists with SORT-PRED if desired."
         (when (and (> i 0) (= (mod i 2) 0))
           (insert "\n")))
       (insert "\n")
+      (insert (string-join statmessages "\n"))
       (setq org-habit-stats-stat-bounds (cons stats-start (point)))))
+
+
 (defun org-habit-stats-insert-calendar (habit-data)
   (let ((cal-start (point))
         (cal-start-line (line-number-at-pos))
@@ -1242,7 +1258,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (let* ((habit-data (org-habit-parse-todo (point)))
            (history-rev (org-habit-stats-get-full-history-new-to-old (nth 4 habit-data)))
            (history (reverse history-rev))
-           (statresults (org-habit-stats-calculate-stats history history-rev habit-data)))
+           (statresults (car (org-habit-stats-calculate-stats history history-rev habit-data))))
       (dolist (x statresults)
         (org-set-property (org-habit-stats-format-property-name (car x))
                           (org-habit-stats-number-to-string-maybe (cdr x)))))))
