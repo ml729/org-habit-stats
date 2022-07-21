@@ -1,4 +1,4 @@
-;;; org-habit-stats.el --- compute info about habits  -*- lexical-binding: t; -*-
+;;; org-habit-stats.el --- display info about habits  -*- lexical-binding: t; -*-
 ;;
 ;; Copyright (C) 2021 null
 ;;
@@ -56,7 +56,9 @@ today in statistics."
     "#ffcf00")
   "Colors to use for bars of habit bar graph for light themes. The default colors are
 Modus Vivendi's colors for graphs. The original value of
-chart-face-color-list is unaffected.")
+chart-face-color-list is unaffected."
+  :group 'org-habit-stats
+  :type '(list color))
 
 (defcustom org-habit-stats-graph-colors-for-dark-list
   '("#b52c2c"
@@ -70,49 +72,88 @@ Modus Vivendi's colors for graphs. The original value of
 chart-face-color-list is unaffected.")
 
 (defcustom org-habit-stats-graph-width 70
-  "Width of x-axis of graph (in columns), not including origin.")
+  "Width of x-axis of graph (in columns), not including origin."
+  :group 'org-habit-stats
+  :type 'integer)
 
 (defcustom org-habit-stats-graph-height 12
-  "Height of y-axis of graph (in line numbers), not including origin.")
+  "Height of y-axis of graph (in line numbers), not including origin."
+  :group 'org-habit-stats
+  :type 'integer)
 
 (defcustom org-habit-stats-graph-left-margin 5
-  "Number of columns to the left of y-axis.")
+  "Number of columns to the left of y-axis."
+  :group 'org-habit-stats
+  :type 'integer)
 
 (defcustom org-habit-stats-graph-min-num-bars 3
-  "How many bars to shift left when the bar graph is truncated.")
+  "How many bars to shift left when the bar graph is truncated."
+  :group 'org-habit-stats
+  :type 'integer)
+
 
 (defcustom org-habit-stats-graph-current-offset 0
-  "How many bars to shift left when the bar graph is truncated.")
+  "How many bars to shift left when the bar graph is truncated."
+  :group 'org-habit-stats
+  :type 'integer)
+
 
 (defcustom org-habit-stats-graph-number-months 5
-  "How many months to display when graph's x-axis is months.")
+  "How many months to display when graph's x-axis is months."
+  :group 'org-habit-stats
+  :type 'integer)
+
 
 (defcustom org-habit-stats-graph-number-weeks 10
-  "How many weeks to display when graph's x-axis is weeks.")
+  "How many weeks to display when graph's x-axis is weeks."
+  :group 'org-habit-stats
+  :type 'integer)
+
 
 (defcustom org-habit-stats-graph-number-days 15
-  "How many days to display when graph's x-axis is days.")
+  "How many days to display when graph's x-axis is days."
+  :group 'org-habit-stats
+  :type 'integer)
+
 
 (defcustom org-habit-stats-view-order '(statistics graph calendar)
   "Output from org-habit-parse-todo of currently viewed habit.")
 
 (defcustom org-habit-stats-graph-data-horizontal-char ?-
-  "Character used to draw horizontal lines for a graph's data.")
+  "Character used to draw horizontal lines for a graph's data."
+  :group 'org-habit-stats
+  :type 'character)
+
 
 (defcustom org-habit-stats-graph-data-vertical-char ?|
-  "Character used to draw vertical lines for a graph's data.")
+  "Character used to draw vertical lines for a graph's data."
+  :group 'org-habit-stats
+  :type 'character)
+
 
 (defcustom org-habit-stats-graph-axis-horizontal-char ?-
-  "Character used to draw horizontal lines for a graph's axes.")
+  "Character used to draw horizontal lines for a graph's axes."
+  :group 'org-habit-stats
+  :type 'character)
+
 
 (defcustom org-habit-stats-graph-axis-vertical-char ?|
-  "Character used to draw vertical lines for a graph's axes.")
+  "Character used to draw vertical lines for a graph's axes."
+  :group 'org-habit-stats
+  :type 'character)
+
 
 (defcustom org-habit-stats-graph-show-values-on-bars t
-  "Whether or not to show exact values on top of bars in the bar graph.")
+  "Whether or not to show exact values on top of bars in the bar graph."
+  :group 'org-habit-stats
+  :type 'boolean)
+
 
 (defcustom org-habit-stats-graph-command-prefix "g"
-  "Prefix key for graph commands.")
+  "Prefix key for graph commands."
+  :group 'org-habit-stats
+  :type 'string)
+
 
 (defcustom org-habit-stats-months-names-alist
   '(("Jan" . 1)
@@ -127,7 +168,10 @@ chart-face-color-list is unaffected.")
     ("Oct" . 10)
     ("Nov" . 11)
     ("Dec" . 12))
-  "Month names used in graphs.")
+  "Month names used in graphs."
+  :group 'org-habit-stats
+  :type '(alist :key-type string :value-type integer))
+
 
 (defcustom org-habit-stats-days-names-alist
   '(("Sun" . 1)
@@ -137,15 +181,23 @@ chart-face-color-list is unaffected.")
     ("Thu" . 5)
     ("Fri" . 6)
     ("Sat" . 7))
-  "Day names used in graphs.")
+  "Day names used in graphs."
+  :group 'org-habit-stats
+  :type '(alist :key-type string :value-type integer))
 
 (defcustom org-habit-stats-stat-date-format
   "%F"
-  "Date format used in graphs for dates in stats.")
+  "Date format used in graphs for dates in stats."
+  :group 'org-habit-stats
+  :type 'string)
+
 
 (defcustom org-habit-stats-graph-date-format
   "%m/%d"
-  "Date format used in graphs for dates in graphs.")
+  "Date format used in graphs for dates in graphs."
+  :group 'org-habit-stats
+  :type 'string)
+
 
 (defcustom org-habit-stats-stat-functions-alist
   '((org-habit-stats-streak . "Current Streak")
@@ -162,7 +214,9 @@ chart-face-color-list is unaffected.")
 visibility, and optional message function. All stat functions
 take in the original parsed habit data (outputted by
 org-habit-parse-todo) and the full habit history (outputted by
-org-habit-stats-get-full-history-new-to-old)")
+org-habit-stats-get-full-history-new-to-old)"
+  :group 'org-habit-stats
+  :type '(alist :key-type function :value-type string))
 
 (defcustom org-habit-stats-message-functions-list
   '(org-habit-stats-streak-message
@@ -171,7 +225,9 @@ org-habit-stats-get-full-history-new-to-old)")
     org-habit-stats-comeback-message
     )
   "List of message functions. A message function takes in the habit history,
-reversed habit history, and parsed habit data, and returns a string.")
+reversed habit history, and parsed habit data, and returns a string."
+  :group 'org-habit-stats
+  :type '(list function))
 
 (defcustom org-habit-stats-streak-message-alist
   '((10 . "Achieved streak 10! Reward: 20 minutes of studying the GNU Emacs manuals")
@@ -180,7 +236,9 @@ reversed habit history, and parsed habit data, and returns a string.")
     (40 . "Achieved streak 40! Reward: 20 minutes of trying out the latest (M)ELPA packages")
     (50 . "Achieved streak 50! Reward: 20 minutes of configuring my .emacs.d"))
   "Alist mapping current streak value to messages to be displayed
-  when that value is achieved.")
+  when that value is achieved."
+  :group 'org-habit-stats
+  :type '(alist :key-type integer :value-type string))
 
 (defcustom org-habit-stats-unstreak-message-alist
   '((3 . "a")
@@ -189,16 +247,24 @@ reversed habit history, and parsed habit data, and returns a string.")
     )
   "Alist mapping current unstreak value (number of consecutive
   misses) to messages to be displayed when that value is
-  achieved.")
+  achieved."
+  :group 'org-habit-stats
+  :type '(alist :key-type integer :value-type string))
 
 (defcustom org-habit-stats-comeback-message
   "Record streak recovered!"
   "Message to display when record streak is achieved again.")
 
 (defcustom org-habit-stats-exp-smoothing-alpha 0.052
-  "Weight of completed days for exponential smoothing.")
+  "Weight of completed days for exponential smoothing."
+  :group 'org-habit-stats
+  :type 'number)
+
 (defcustom org-habit-stats-exp-smoothing-beta 0.10
-  "Weight of missed days for exponential smoothing.")
+  "Weight of missed days for exponential smoothing."
+  :group 'org-habit-stats
+  :type 'number)
+
 
 
 (defcustom org-habit-stats-graph-functions-alist
@@ -229,20 +295,34 @@ reversed habit history, and parsed habit data, and returns a string.")
   "Alist mapping graph functions to a list containing: the key
 that invokes the function, the title of the graph, the name of
 the x-axis, the name of the y-axis, the graph direction, and the
-max number of bars to show at a time.")
+max number of bars to show at a time."
+  :group 'org-habit-stats
+  :type '(alist :key-type function :value-type sexp))
 
 (defcustom org-habit-stats-graph-default-func 'org-habit-stats-graph-completions-per-week
-  "Current graph function used in org habit stats buffer.")
+  "Current graph function used in org habit stats buffer."
+  :group 'org-habit-stats
+  :type 'function)
+
 
 (defcustom org-habit-stats-show-blank-when-new-habit t
   "Whether to display blank screen with new habit message for a habit with
-0 completions logged.")
+0 completions logged."
+  :group 'org-habit-stats
+  :type 'boolean)
+
 (setq org-habit-stats-show-blank-when-new-habit nil)
 (defcustom org-habit-stats-new-habit-message "A new habit."
-  "Message to display when habit has 0 completions logged.")
+  "Message to display when habit has 0 completions logged."
+  :group 'org-habit-stats
+  :type 'boolean)
+
 
 (defcustom org-habit-stats-calendar-dont-highlight-whitespace t
-  "If t, don't highlight whitespace padding in calendar dates.")
+  "If t, don't highlight whitespace padding in calendar dates."
+  :group 'org-habit-stats
+  :type 'boolean)
+
 
 ;;; Defvars
 (defvar org-habit-stats-buffer "*Org-Habit-Stats*"
@@ -261,8 +341,8 @@ max number of bars to show at a time.")
   "Faces used for bars in graphs, generated from org-habit-stats-graph-colors-for-light-list
 or org-habit-stats-graph-colors-for-dark-list based on the background type.")
 
-(defvar org-habit-stats-current-habit-data nil
-  "Output from org-habit-parse-todo of currently viewed habit.")
+;; (defvar org-habit-stats-current-habit-data nil
+;;   "Output from org-habit-parse-todo of currently viewed habit.")
 
 (defvar org-habit-stats-graph-current-func nil
   "Current graph function used in org habit stats buffer.")
@@ -317,41 +397,6 @@ x-axis name, y-axis name.")
   :group 'org-habit-stats)
 
 ;; Stats functions
-(defun org-habit-stats-dates-to-binary (tasks)
-  "Return binary version of TASKS from newest to oldest, where
-TASKS is a list of all the past dates this habit was marked
-closed. Assumes the dates logged for the habit are in order,
-newest to oldest."
-  (let* ((bin-hist '()))
-    (while (> (length tasks) 1)
-      (push 1 bin-hist)
-      (let* ((next (pop tasks))
-             (diff (- (nth 0 tasks) next)))
-        (while (> diff 1)
-          (push 0 bin-hist)
-          (setq diff (- diff 1)))))
-    (if (= (length tasks) 1) (push 1 bin-hist))
-    bin-hist))
-
-;; (defun org-habit-stats-dates-to-binary (history)
-;;   (let* ((today (org-today))
-;;          day (pop history)
-;;          (bin-hist '()))
-;;     (while history
-;;     (push (cons day 1) bin-hist)
-;;     (setq day (1+ day))
-;;     (while (< day (car history))
-;;       (push (cons day 0) bin-hist)
-;;       (setq day (1+ day))))
-
-;;     (let ((diff (- (car history) day)))
-;;       (if (> diff 1)
-;;           (dotimes (i (1- diff))
-;;             (push (cons (+ day i 1) 0))))
-;;     (if (> (- (car history) day) 1)
-;;         (dotimes i (1- (-))
-;;                  )))))
-
 (defun org-habit-stats-get-full-history-new-to-old (history)
   "Return the full history of a habit from new to old.
 HISTORY is a list of dates of completions. A date here is the
@@ -389,9 +434,9 @@ This returns the reverse of calling
 
 (defun org-habit-stats-get-repeat-history-old-to-new (habit-data)
   (let* ((partial-history (nth 4 habit-data))
-         (repeat-type (nth 1000 habit-data))
-         (repeat-len (nth 1000 habit-data))
-         (next-scheduled (nth 1000 habit-data))
+         (repeat-type (nth 5 habit-data))
+         (repeat-len (nth 1 habit-data))
+         (next-scheduled (nth 0 habit-data))
          (full-history (org-habit-stats-get-full-history-old-to-new partial-history))
          (new-history '()))
     (cond ((= repeat-len 1) full-history)
@@ -399,7 +444,7 @@ This returns the reverse of calling
                (string= repeat-type "+"))
            (dolist (x full-history (reverse new-history))
              (when (not (and (= 0 (cdr x))
-                             (/= 0 (mod (- next-scheduled (car x) repeat-len)))))
+                             (/= 0 (mod (- next-scheduled (car x)) repeat-len))))
                (push x new-history)))
            ;; (seq-filter (lambda (x) (and (= 0 (cdr x))
            ;;                              (/= 0 (mod (- next-scheduled (car x) repeat-len)))))
@@ -411,6 +456,8 @@ This returns the reverse of calling
           ((string= repeat-type ".+")
            (let ((most-recent-complete (caar full-history)))
              (dolist (x full-history (reverse new-history))
+               (when (= 1 (cdr x))
+                   (setq most-recent-complete (car x)))
                (when (not (and (= 0 (cdr x))
                              (/= 0 (mod (- (car x) most-recent-complete) repeat-len))))
                  (push x new-history))))
@@ -419,11 +466,11 @@ This returns the reverse of calling
            ;; if incomplete, and difference from prev completion is nonzero mod repeat len, remove it
            ;; just construct a new list, more efficient
            )
-          (t (error (format "Invalid repeat type %s" repeat-type)))))
+          (t (error (format "Invalid repeat type %s" repeat-type))))))
   (defun org-habit-stats--streak (h)
     (if (and h (= (cdr (pop h)) 1))
         (1+ (org-habit-stats--streak h))
-      0)))
+      0))
 
 (defun org-habit-stats-streak (history history-rev &optional habit-data)
   (org-habit-stats--streak history-rev))
@@ -459,7 +506,7 @@ history, returns 0."
           (setq record-day curr-streak-start))))
     (cons record-streak record-day)))
 
-(defun single-whitespace-only (s)
+(defun org-habit-stats--single-whitespace-only (s)
   (string-join
    (seq-filter (lambda (x) (if (> (length x) 0) t))
                (split-string s " "))
@@ -471,7 +518,7 @@ history, returns 0."
          (record-day (cdr record-data)))
     (concat (number-to-string record-streak)
             ", on "
-            (single-whitespace-only (org-agenda-format-date-aligned record-day)))))
+            (org-habit-stats--single-whitespace-only (org-agenda-format-date-aligned record-day)))))
 
 (defun org-habit-stats-record-streak-days (history history-rev habit-data)
   (car (org-habit-stats--record-streak-full history history-rev habit-data)))
@@ -492,8 +539,7 @@ history, returns 0."
   (format "%.2f%%" (* 100 x)))
 (defun org-habit-stats--N-day-percentage (history history-rev habit-data N)
   (org-habit-stats-percentage-format
-   (/ (org-habit-stats--N-day-total history history-rev N) (float N)))
-  )
+   (/ (org-habit-stats--N-day-total history history-rev N) (float N))))
 
 (defun org-habit-stats-30-day-percentage (history history-rev habit-data)
   (org-habit-stats--N-day-percentage history history-rev habit-data 30))
@@ -533,8 +579,7 @@ history, returns 0."
           (push (+ (* (- 1 coeff) prev-score)
                    (* coeff completed)) scores)))
       ;; (print scores)
-      (mapcar (lambda (x) (* 100 x)) scores)
-      )))
+      (mapcar (lambda (x) (* 100 x)) scores))))
 
 (defun org-habit-stats-exp-smoothing-list-today (history history-rev habit-data)
   (if (not history) 0
@@ -625,8 +670,7 @@ https://stackoverflow.com/a/6050245"
                                        space-at-new-start
                                      (< new-start new-end))
                                 (1+ new-start)
-                              new-start))
-          )
+                              new-start)))
      (move-overlay (copy-overlay ol)
                    new-start-adjusted
                    new-end
@@ -678,8 +722,7 @@ negative."
     (while (< n 0)
       (setq n (+ n 12))
       (setq org-habit-stats-displayed-year
-            (1- org-habit-stats-displayed-year))
-      ))
+            (1- org-habit-stats-displayed-year))))
   (let ((sum (+ n org-habit-stats-displayed-month)))
     (if (> sum 12)
         (progn
@@ -819,8 +862,7 @@ the second containing the corresponding counts per category."
    history
    (lambda (d) 1)
    (lambda (m1 m2) t)
-   (lambda (m) "hi")
-   ))
+   (lambda (m) "hi")))
 
 ;;; Chart functions
 ;; (defun org-habit-stats-color-brightness (hex)
@@ -839,6 +881,7 @@ the second containing the corresponding counts per category."
    In some earlier versions of Emacs the name of this class
    contains a typo ('chart-sequece') so we redefine it here under
    a new name.")
+
 (defun org-habit-stats-graph-create-faces ()
   "TODO add terminal support"
   (let ((light-bg (if (equal (frame-parameter nil 'background-mode) 'light) t nil))
@@ -880,20 +923,10 @@ lines."
   (let ((range (oref (oref c x-axis) bounds)))
     (+ (oref c y-margin)
        (round (* (float (- x (car range)))
-		 (/ (float (oref c x-width))
-		    (float (- (cdr range) (car range))))))))
-  )
+                 (/ (float (oref c x-width))
+                    (float (- (cdr range) (car range)))))))))
 
 (advice-add 'chart-translate-xpos :override 'org-habit-stats-chart-translate-xpos)
-
-;; (defun org-habit-stats-chart-draw-data (c)
-;;   (unwind-protect
-;;       (progn
-;;       (advice-add 'chart-draw-line :override
-;;                   'org-habit-stats-chart-draw-line-data
-;;                   '((name . org-habit-stats-draw-line-override)))
-;;     (chart-draw-data c))
-;;     (advice-remove 'chart-draw-line 'org-habit-stats-draw-line-override)))
 
 (defun org-habit-stats-chart-draw-axis (c)
   (unwind-protect
@@ -985,42 +1018,6 @@ customized line drawing characters.
 		    seq (cdr seq)))))
         (setq data (cdr data))))))
 
-
-;; (defun org-habit-stats-chart-draw-values (c)
-;;   "Display the values on an already drawn bar chart C."
-;;   (let* ((data (oref c sequences))
-;;          (dir (oref c direction))
-;;          (odir (if (eq dir 'vertical) 'horizontal 'vertical)))
-;;     (while data
-;;       (if (stringp (car (oref (car data) data)))
-;;           ;; skip string lists...
-;;           nil
-;;         ;; display number lists...
-;;         (let ((i 0)
-;;               (seq (oref (car data) data)))
-;;           (while seq
-;;             (let* ((rng (chart-translate-namezone c i))
-;;                    (dp (if (eq dir 'vertical)
-;;                            (chart-translate-ypos c (car seq))
-;;                          (chart-translate-xpos c (car seq))))
-;;                    (zp (if (eq dir 'vertical)
-;;                            (chart-translate-ypos c 0)
-;;                          (chart-translate-xpos c 0)))
-;;                    (val (car seq))
-;;                    (val-str
-;;                     (cond ((integerp val) (format "%d" val))
-;;                           ((floatp val) (format "%.1f" val))
-;;                           (t val))))
-;;               (if (= (car rng) (cdr rng)) nil
-;;                 (if (eq dir 'vertical)
-;;                 (chart-display-label
-;;                  val-str odir (1- dp) (car rng) (cdr rng))
-;;                 (chart-display-label
-;;                  val-str dir (/ (+ (car rng) (cdr rng)) 2) (1+ dp) (+ 1 dp (length val-str)))))
-;;               (setq i (1+ i)
-;;                     seq (cdr seq))))))
-;;       (setq data (cdr data)))))
-
 (defun org-habit-stats-chart-draw (c &optional buff)
   "Start drawing a chart object C in optional BUFF.
 Begins at line LINE."
@@ -1039,10 +1036,7 @@ Begins at line LINE."
       (org-habit-stats-chart-draw-title c)
       ;; Display data
       (sit-for 0)
-      (org-habit-stats-chart-draw-data c)
-      ;; (when org-habit-stats-graph-show-values-on-bars
-      ;;   (org-habit-stats-chart-draw-values c))
-      ))))
+      (org-habit-stats-chart-draw-data c)))))
 
 
 (defun org-habit-stats--chart-trim-offset (seq max offset end)
@@ -1090,8 +1084,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
                            :title-face titleface
                            :x-margin topmargin
                            :y-margin leftmargin
-                           :direction dir
-                           ))
+                           :direction dir))
         (iv (eq dir 'vertical)))
     ;; chart.el sets the widths to the window dimensions after instantiation
     ;; manually set the widths to our values here
@@ -1235,9 +1228,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
             "\n")
     (insert (org-habit-stats-format-absolute-time-string "Next Scheduled: %A, %B %d, %Y"
                                                          (org-habit-stats-days-to-time habit-next-scheduled))
-            "\n")
-
-    ))
+            "\n")))
 
 (defun org-habit-stats-format-one-stat (statname statdata)
   (let* ((fdata (cond ((integerp statdata) (format "%d" statdata))
@@ -1299,9 +1290,8 @@ display to MAX, and sort lists with SORT-PRED if desired."
   (let* ((graph-bounds org-habit-stats-graph-bounds)
          (graph-start (car graph-bounds))
          (graph-end (cdr graph-bounds))
-         (completed-days (nth 4 org-habit-stats-current-habit-data))
-         (history-rev (org-habit-stats-get-full-history-new-to-old completed-days))
-         (history (reverse history-rev)))
+         (history (org-habit-stats-get-repeat-history-old-to-new habit-data))
+         (history-rev (reverse history)))
     (save-excursion
       (goto-char graph-start)
       (delete-region graph-start graph-end)
@@ -1363,9 +1353,13 @@ display to MAX, and sort lists with SORT-PRED if desired."
    - score or histogram of habit totals monthly/weekly Various
    - habit statistics"
   (let* ((buff (current-buffer))
-         (completed-days (nth 4 habit-data))
-         (history-rev (org-habit-stats-get-full-history-new-to-old completed-days))
-         (history (reverse history-rev)))
+         ;; (completed-days (nth 4 habit-data))
+         (history (org-habit-stats-get-repeat-history-old-to-new habit-data))
+         (history-rev (reverse history)))
+    (print (mapcar (lambda (x) (org-habit-stats-format-absolute-day-string
+                                "%m/%d"
+                                x))
+     (nth 4 habit-data)))
     (setq org-habit-stats-current-history history)
     (setq org-habit-stats-current-history-rev history-rev)
     (setq org-habit-stats-current-habit-data habit-data)
@@ -1505,9 +1499,9 @@ display to MAX, and sort lists with SORT-PRED if desired."
 (defun org-habit-stats-update-properties ()
   (interactive)
   (when (org-is-habit-p (point))
-    (let* ((habit-data (org-habit-parse-todo (point)))
-           (history-rev (org-habit-stats-get-full-history-new-to-old (nth 4 habit-data)))
-           (history (reverse history-rev))
+    (let* ((habit-data (org-habit-stats-parse-todo (point)))
+           (history (org-habit-stats-get-repeat-history-old-to-new habit-data))
+           (history-rev (reverse history))
            (statresults (org-habit-stats-calculate-stats history history-rev habit-data)))
       (dolist (x statresults)
         (org-set-property (org-habit-stats-format-property-name (car x))
@@ -1518,11 +1512,15 @@ display to MAX, and sort lists with SORT-PRED if desired."
 (advice-add 'org-store-log-note :after 'org-habit-stats-update-properties)
 
 ;;; org-habit-stats commands
+(defun org-habit-stats-parse-todo (&optional pom)
+  (let ((org-habit-preceding-days 40000))
+    (org-habit-parse-todo pom)))
+
 ;;;###autoload
 (defun org-habit-stats-view-habit-at-point ()
   (interactive)
   (let ((habit-name (org-element-property :raw-value (org-element-at-point)))
-        (habit-data (org-habit-parse-todo (point)))
+        (habit-data (org-habit-stats-parse-todo (point)))
         (habit-description (org-entry-get (point) "DESCRIPTION")))
     (org-habit-stats-create-habit-buffer habit-data habit-name habit-description)))
 
