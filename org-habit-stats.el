@@ -354,15 +354,19 @@ newest to oldest."
 
 (defun org-habit-stats-get-full-history-new-to-old (history)
   "Return the full history of a habit from new to old.
-HISTORY is a list of completed dates. The returned value is a
-list where each element is a pair of the form (date . 0 or 1). If
-today is marked completed, it is included in the history. If
-today is not marked completed, it is included in the history if
-and only if `org-habit-stats-include-uncompleted-today` is t."
+HISTORY is a list of dates of completions. A date here is the
+number of days since December 31, 1 BC. The returned value is a
+list of dates since the earliest date in history (inclusive)
+where each element is a pair of the form (date . 0 or 1),
+indicating if there was a completion or not on that day.
+
+If today is marked completed, it is included in the history. If today is
+not marked completed, it is included in the history if and only
+if `org-habit-stats-include-uncompleted-today` is t."
   (let ((today (org-today))
         (bin-hist nil))
     (add-to-list 'history (1+ today) t)
-    (seq-reduce
+    (seq-reduce ;;replace with reduce
      (lambda (a b)
        (push (cons a 1) bin-hist)
        (setq a (1+ a))
@@ -383,10 +387,43 @@ This returns the reverse of calling
 `org-habit-stats-get-full-history-new-to-old` on HISTORY."
   (reverse (org-habit-stats-get-full-history-new-to-old history)))
 
-(defun org-habit-stats--streak (h)
-  (if (and h (= (cdr (pop h)) 1))
-      (1+ (org-habit-stats--streak h))
-    0))
+(defun org-habit-stats-get-repeat-history-old-to-new (habit-data)
+  (let* ((partial-history (nth 4 habit-data))
+         (repeat-type (nth 1000 habit-data))
+         (repeat-len (nth 1000 habit-data))
+         (next-scheduled (nth 1000 habit-data))
+         (full-history (org-habit-stats-get-full-history-old-to-new partial-history))
+         (new-history '()))
+    (cond ((= repeat-len 1) full-history)
+          ((or (string= repeat-type "++")
+               (string= repeat-type "+"))
+           (dolist (x full-history (reverse new-history))
+             (when (not (and (= 0 (cdr x))
+                             (/= 0 (mod (- next-scheduled (car x) repeat-len)))))
+               (push x new-history)))
+           ;; (seq-filter (lambda (x) (and (= 0 (cdr x))
+           ;;                              (/= 0 (mod (- next-scheduled (car x) repeat-len)))))
+           ;;             full-history)
+           ;; use next scheduled
+           ;; iterate through full-history
+           ;; if a date minus next scheduled is nonzero mod repeat-len, and is incomplete, remove it
+           )
+          ((string= repeat-type ".+")
+           (let ((most-recent-complete (caar full-history)))
+             (dolist (x full-history (reverse new-history))
+               (when (not (and (= 0 (cdr x))
+                             (/= 0 (mod (- (car x) most-recent-complete) repeat-len))))
+                 (push x new-history))))
+           ;; iterate through full-history
+           ;; local variable for most recent completion
+           ;; if incomplete, and difference from prev completion is nonzero mod repeat len, remove it
+           ;; just construct a new list, more efficient
+           )
+          (t (error (format "Invalid repeat type %s" repeat-type)))))
+  (defun org-habit-stats--streak (h)
+    (if (and h (= (cdr (pop h)) 1))
+        (1+ (org-habit-stats--streak h))
+      0)))
 
 (defun org-habit-stats-streak (history history-rev &optional habit-data)
   (org-habit-stats--streak history-rev))
@@ -665,8 +702,10 @@ negative."
   "Scroll org-habit-stats calendar forward N months.
 N can be positive, zero, or negative."
   (org-habit-stats-increment-displayed-month n)
+  (if (not (derived-mode-p 'org-habit-stats-mode))
+      (user-error "Not in an org-habit-stats-mode buffer")
   (org-habit-stats-refresh-calendar-buffer)
-  (org-habit-stats-refresh-calendar-section))
+  (org-habit-stats-refresh-calendar-section)))
 
 (defun org-habit-stats-calendar-scroll-right (arg)
   (interactive "p")
@@ -773,9 +812,7 @@ the second containing the corresponding counts per category."
                         history)))
      (cons dayslst
            (reverse (org-habit-stats--exp-smoothing-list-full
-                     history history-rev habit-data)))
-    )
-  )
+                     history history-rev habit-data)))))
 
 (defun org-habit-stats-graph-completions-test (history)
   (org-habit-stats-graph-count-per-category
@@ -949,40 +986,40 @@ customized line drawing characters.
         (setq data (cdr data))))))
 
 
-(defun org-habit-stats-chart-draw-values (c)
-  "Display the values on an already drawn bar chart C."
-  (let* ((data (oref c sequences))
-         (dir (oref c direction))
-         (odir (if (eq dir 'vertical) 'horizontal 'vertical)))
-    (while data
-      (if (stringp (car (oref (car data) data)))
-          ;; skip string lists...
-          nil
-        ;; display number lists...
-        (let ((i 0)
-              (seq (oref (car data) data)))
-          (while seq
-            (let* ((rng (chart-translate-namezone c i))
-                   (dp (if (eq dir 'vertical)
-                           (chart-translate-ypos c (car seq))
-                         (chart-translate-xpos c (car seq))))
-                   (zp (if (eq dir 'vertical)
-                           (chart-translate-ypos c 0)
-                         (chart-translate-xpos c 0)))
-                   (val (car seq))
-                   (val-str
-                    (cond ((integerp val) (format "%d" val))
-                          ((floatp val) (format "%.1f" val))
-                          (t val))))
-              (if (= (car rng) (cdr rng)) nil
-                (if (eq dir 'vertical)
-                (chart-display-label
-                 val-str odir (1- dp) (car rng) (cdr rng))
-                (chart-display-label
-                 val-str dir (/ (+ (car rng) (cdr rng)) 2) (1+ dp) (+ 1 dp (length val-str)))))
-              (setq i (1+ i)
-                    seq (cdr seq))))))
-      (setq data (cdr data)))))
+;; (defun org-habit-stats-chart-draw-values (c)
+;;   "Display the values on an already drawn bar chart C."
+;;   (let* ((data (oref c sequences))
+;;          (dir (oref c direction))
+;;          (odir (if (eq dir 'vertical) 'horizontal 'vertical)))
+;;     (while data
+;;       (if (stringp (car (oref (car data) data)))
+;;           ;; skip string lists...
+;;           nil
+;;         ;; display number lists...
+;;         (let ((i 0)
+;;               (seq (oref (car data) data)))
+;;           (while seq
+;;             (let* ((rng (chart-translate-namezone c i))
+;;                    (dp (if (eq dir 'vertical)
+;;                            (chart-translate-ypos c (car seq))
+;;                          (chart-translate-xpos c (car seq))))
+;;                    (zp (if (eq dir 'vertical)
+;;                            (chart-translate-ypos c 0)
+;;                          (chart-translate-xpos c 0)))
+;;                    (val (car seq))
+;;                    (val-str
+;;                     (cond ((integerp val) (format "%d" val))
+;;                           ((floatp val) (format "%.1f" val))
+;;                           (t val))))
+;;               (if (= (car rng) (cdr rng)) nil
+;;                 (if (eq dir 'vertical)
+;;                 (chart-display-label
+;;                  val-str odir (1- dp) (car rng) (cdr rng))
+;;                 (chart-display-label
+;;                  val-str dir (/ (+ (car rng) (cdr rng)) 2) (1+ dp) (+ 1 dp (length val-str)))))
+;;               (setq i (1+ i)
+;;                     seq (cdr seq))))))
+;;       (setq data (cdr data)))))
 
 (defun org-habit-stats-chart-draw (c &optional buff)
   "Start drawing a chart object C in optional BUFF.
@@ -1048,7 +1085,6 @@ going in direction DIR [`horizontal' `vertical'] with TITLE using
 a name sequence NAMELST labeled NAMETITLE with values NUMLST
 labeled NUMTITLE. Optional arguments: Set the chart's max element
 display to MAX, and sort lists with SORT-PRED if desired."
-  (interactive)
   (let ((nc (make-instance 'chart-bar
                            :title title
                            :title-face titleface
@@ -1151,15 +1187,19 @@ display to MAX, and sort lists with SORT-PRED if desired."
 
 ;;; Graph commands
 (defun org-habit-stats-switch-graph (graph-func)
-  (setq org-habit-stats-graph-current-func graph-func)
-  (setq org-habit-stats-graph-current-offset 0)
-  (org-habit-stats-refresh-graph-section))
+  (if (not (derived-mode-p 'org-habit-stats-mode))
+      (user-error "Not in an org-habit-stats-mode buffer")
+    (setq org-habit-stats-graph-current-func graph-func)
+    (setq org-habit-stats-graph-current-offset 0)
+    (org-habit-stats-refresh-graph-section)))
 
 
 (defun org-habit-stats--scroll-graph (n)
-  (setq org-habit-stats-graph-current-offset
-        (+ n org-habit-stats-graph-current-offset))
-  (org-habit-stats-refresh-graph-section))
+  (if (not (derived-mode-p 'org-habit-stats-mode))
+      (user-error "Not in an org-habit-stats-mode buffer")
+    (setq org-habit-stats-graph-current-offset
+          (+ n org-habit-stats-graph-current-offset))
+    (org-habit-stats-refresh-graph-section)))
 
 (defun org-habit-stats-scroll-graph-left ()
   (interactive)
@@ -1250,9 +1290,11 @@ display to MAX, and sort lists with SORT-PRED if desired."
 ;;; Refresh sections
 (defun org-habit-stats-refresh-buffer ()
   (interactive)
-  (erase-buffer)
-  (org-habit-stats--insert-habit-buffer-contents)
-  (set-buffer-modified-p nil))
+  (if (not (derived-mode-p 'org-habit-stats-mode))
+      (user-error "Not in an org-habit-stats-mode buffer")
+    (erase-buffer)
+    (org-habit-stats--insert-habit-buffer-contents)
+    (set-buffer-modified-p nil)))
 (defun org-habit-stats-refresh-graph-section ()
   (let* ((graph-bounds org-habit-stats-graph-bounds)
          (graph-start (car graph-bounds))
@@ -1295,7 +1337,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
   ;; write a function org-habit-stats--
   (org-habit-stats--insert-divider)
   (if (and org-habit-stats-show-blank-when-new-habit
-           (= 0 (length completed-days)))
+           (= 0 (length (nth 4 habit-data))))
       (insert org-habit-stats-new-habit-message)
     (org-habit-stats-insert-messages history history-rev habit-data)
     (org-habit-stats-insert-section-header "Statistics")
@@ -1311,7 +1353,9 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (org-habit-stats--insert-divider)
     (org-habit-stats-insert-section-header "Graph")
 ;;; create graph
-    (org-habit-stats-draw-graph history history-rev habit-data))))
+    (org-habit-stats-draw-graph history history-rev habit-data)
+    ;; (org-habit-stats-gnuplot-graph history history-rev habit-data)
+    )))
 
 (defun org-habit-stats-create-habit-buffer (habit-data habit-name habit-description)
   "Creates buffer displaying statistics, calendar, and graphs.
@@ -1373,11 +1417,51 @@ display to MAX, and sort lists with SORT-PRED if desired."
 
 ;; Send gnu plot file to gnu plot and get graph in current buffer
 
+(defun org-habit-stats-gnuplot-graph (history history-rev habit-data)
+  (let* ((graph-start (point))
+         (func org-habit-stats-graph-current-func)
+         (func-info (cdr (assoc func org-habit-stats-graph-functions-alist)))
+         (graph-title (nth 1 func-info))
+         (x-name (nth 2 func-info))
+         (y-name (nth 3 func-info))
+         (dir (nth 4 func-info))
+         (max-bars (nth 5 func-info))
+         (graph-data-names (funcall func history history-rev habit-data))
+         (graph-names (car graph-data-names))
+         (graph-data (cdr graph-data-names)))
+    (insert (make-string 2 ?\n))
+    (org-habit-stats--gnuplot-graph
+     graph-title
+     graph-names
+     x-name
+     graph-data
+     y-name
+     max-bars)))
+
+(defun org-habit-stats--gnuplot-graph (title namelst nametitle numlst numtitle max-bars)
+  (let* ((gnuplot-buf (generate-new-buffer "*Org Habit Stats gnuplot*"))
+         (data-file (make-temp-file "org-habit-stats-gnuplot-graph-data"))
+         (output-file (make-temp-file "org-habit-stats-gnuplot-graph-output")))
+    (with-temp-file data-file
+      (dolist (x (mapcar* #'cons namelst numlst))
+        (insert (format "%s %f\n" (car x) (cdr x)))))
+    (with-current-buffer gnuplot-buf
+      (gnuplot-mode)
+      (insert "set term svg\n"
+              (format "set output '%s'\n" output-file)
+              "set boxwidth 0.7\n"
+              "set style fill solid\n"
+              (format "plot '%s' using 2:xtic(1) w boxes\n" data-file))
+      (save-window-excursion (gnuplot-send-buffer-to-gnuplot)))
+    (insert-image (create-image output-file))
+    (delete-file data-file)
+    ;; (delete-file output-file)
+    (kill-buffer gnuplot-buf)))
 
 ;; Create org habit stats display buffer
 (defun org-habit-stats-update-graph (history)
   (interactive)
-  (let* ((gnuplot-buf (generate-new-buffer "*Org Habit Stats*"))
+  (let* ((gnuplot-buf (generate-new-buffer "*Org Habit Stats gnuplot*"))
          (data-file (make-temp-file "org-habit-stats-score-monthly-data"))
          (output-file (make-temp-file "org-habit-stats-graph-output")))
     ;;insert
@@ -1402,7 +1486,8 @@ display to MAX, and sort lists with SORT-PRED if desired."
             (org-habit-stats-insert-drawer org-habit-stats-graph-drawer-name graph-content))
       (delete-file data-file)
       (delete-file output-file)
-      (kill-buffer gnuplot-buf)))
+      (kill-buffer gnuplot-buf)
+      ))
 
 
 
@@ -1440,20 +1525,15 @@ display to MAX, and sort lists with SORT-PRED if desired."
         (habit-data (org-habit-parse-todo (point)))
         (habit-description (org-entry-get (point) "DESCRIPTION")))
     (org-habit-stats-create-habit-buffer habit-data habit-name habit-description)))
+
 ;;;###autoload
 (defun org-habit-stats-exit ()
   (interactive)
-  (if (bufferp org-habit-stats-calendar-buffer)
+   (if (not (derived-mode-p 'org-habit-stats-mode))
+      (user-error "Not in an org-habit-stats-mode buffer")
+  (when (bufferp org-habit-stats-calendar-buffer)
       (kill-buffer org-habit-stats-calendar-buffer))
-  (kill-buffer org-habit-stats-buffer))
-
-(defun org-habit-stats-test-1-make-buffer ()
-  (interactive)
-  (org-habit-stats-make-calendar-buffer (org-habit-parse-todo (point))))
-(defun org-habit-stats-test-make-buffer ()
-  (interactive)
-  (org-habit-stats-create-habit-buffer (org-habit-parse-todo (point))))
-
+  (kill-buffer org-habit-stats-buffer)))
 
 ;;; Major mode
 (defun org-habit-stats-format-graph-func-name (s)
@@ -1504,61 +1584,6 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (setq org-habit-stats-graph-current-func (caar org-habit-stats-graph-functions-alist)))
   (setq org-habit-stats-graph-face-list (org-habit-stats-graph-create-faces))
   )
-
-
-
-
-;; (cl-defmethod chart-draw-data ((c chart-bar))
-;;   "Display the data available in a bar chart C."
-;;   (let* ((data (oref c sequences))
-;; 	 (dir (oref c direction))
-;; 	 (odir (if (eq dir 'vertical) 'horizontal 'vertical))
-;;          (faces
-;;           (if (functionp chart-face-list)
-;;               (funcall chart-face-list)
-;;             chart-face-list)))
-;;     (while data
-;;       (if (stringp (car (oref (car data) data)))
-;; 	  ;; skip string lists...
-;; 	  nil
-;; 	;; display number lists...
-;; 	(let ((i 0)
-;; 	      (seq (oref (car data) data)))
-;; 	  (while seq
-;; 	    (let* ((rng (chart-translate-namezone c i))
-;; 		   (dp (if (eq dir 'vertical)
-;; 			   (chart-translate-ypos c (car seq))
-;; 			 (chart-translate-xpos c (car seq))))
-;; 		  (zp (if (eq dir 'vertical)
-;; 			  (chart-translate-ypos c 0)
-;; 			(chart-translate-xpos c 0)))
-;; 		  (fc (if faces
-;; 			  (nth (% i (length faces)) faces)
-;; 			'default)))
-;; 	      (if (< dp zp)
-;; 		  (progn
-;; 		    (chart-draw-line dir (car rng) dp zp)
-;; 		    (chart-draw-line dir (cdr rng) dp zp)
-;;                     )
-;; 		(chart-draw-line dir (car rng) zp (1+ dp))
-;;                 (chart-draw-line dir (cdr rng) zp (1+ dp))
-;;                 )
-;; 	      (if (= (car rng) (cdr rng)) nil
-;; 		(chart-draw-line odir dp (1+ (car rng)) (cdr rng))
-;; 		(chart-draw-line odir zp (car rng) (1+ (cdr rng)))
-;;                     ;; (chart-display-label (int-to-string (car seq))
-;;    ;; odir (1- dp) (car rng) (cdr rng))
-;;                 )
-;; 	      (if (< dp zp)
-;; 		  (chart-deface-rectangle dir rng (cons dp zp) fc)
-;; 		(chart-deface-rectangle dir rng (cons zp dp) fc))
-;; 	      )
-;; 	    ;; find the bounds, and chart it!
-;; 	    ;; for now, only do one!
-;; 	    (setq i (1+ i)
-;; 		  seq (cdr seq)))))
-;;       (setq data (cdr data))))
-;;   )
 
 
 (provide 'org-habit-stats)
