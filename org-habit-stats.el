@@ -1270,7 +1270,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
       (org-habit-stats-insert-section-header "Graph")
       (org-habit-stats-draw-graph history history-rev habit-data))))
 
-(defun org-habit-stats-create-habit-buffer (habit-data habit-name habit-description)
+(defun org-habit-stats-create-habit-buffer (habit-data habit-name habit-description habit-source)
   "Creates buffer displaying statistics, calendar, and graphs.
     Calendar where days habit is done are marked Graph of habit
    - score or histogram of habit totals monthly/weekly Various
@@ -1278,6 +1278,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
   (let* ((buff (current-buffer))
          (history (org-habit-stats-get-repeat-history-old-to-new habit-data))
          (history-rev (reverse history)))
+    (setq org-habit-stats-habit-source habit-source)
     (setq org-habit-stats-current-history history)
     (setq org-habit-stats-current-history-rev history-rev)
     (setq org-habit-stats-current-habit-data habit-data)
@@ -1367,12 +1368,139 @@ habit data getting truncated."
 
 ;;;###autoload
 (defun org-habit-stats-view-habit-at-point ()
-  "Open an org-habit-stats buffer for the habit at point."
+  "Open an org-habit-stats buffer for the habit at point in a file."
   (interactive)
   (let ((habit-name (org-element-property :raw-value (org-element-at-point)))
         (habit-data (org-habit-stats-parse-todo (point)))
         (habit-description (org-entry-get (point) "DESCRIPTION")))
-    (org-habit-stats-create-habit-buffer habit-data habit-name habit-description)))
+    (org-habit-stats-create-habit-buffer habit-data habit-name habit-description 'file)))
+
+;;;###autoload
+(defun org-habit-stats-view-next-habit-in-buffer ()
+  "View next habit in current file."
+  (interactive)
+  (let ((orig-pos (point))
+        habit-pos)
+    (while (and (< (point) (point-max))
+                (not (setq habit-pos (org-is-habit-p (point)))))
+      (outline-next-heading))
+    (when (not habit-pos)
+      (beginning-of-buffer)
+      (outline-next-heading)
+      (while (and (< (point) orig-pos)
+                  (not (setq habit-pos (org-is-habit-p (point)))))
+        (outline-next-heading)))
+    (if habit-pos
+        (org-habit-stats-view-habit-at-point)
+      (user-error "No habits found in buffer"))))
+
+;;;###autoload
+(defun org-habit-stats-view-previous-habit-in-buffer ()
+  "View previous habit in current file."
+  (interactive)
+  (let ((orig-pos (point))
+        habit-pos)
+    (while (and (> (point) (point-min))
+                (not (setq habit-pos (org-is-habit-p (point)))))
+      (outline-previous-heading))
+    (when (not habit-pos)
+      (end-of-buffer)
+      (outline-previous-heading)
+      (while (and (> (point) orig-pos)
+                  (not (setq habit-pos (org-is-habit-p (point)))))
+        (outline-previous-heading)))
+    (if habit-pos
+        (org-habit-stats-view-habit-at-point)
+      (user-error "No habits found in buffer"))))
+
+;;;###autoload
+(defun org-habit-stats-view-next-habit ()
+  "From org-habit-stats buffer, view next habit in file or agenda."
+  (interactive)
+  (if (not (derived-mode-p 'org-habit-stats-mode))
+      (user-error "Not in an org-habit-stats-mode buffer")
+    (org-habit-stats-exit)
+    (if (eq org-habit-stats-habit-source 'agenda)
+        (progn (org-agenda-next-item)
+               (org-habit-stats-view-next-habit-in-agenda))
+      (outline-next-heading)
+      (org-habit-stats-view-next-habit-in-buffer))))
+
+;;;###autoload
+(defun org-habit-stats-view-previous-habit ()
+  "From org-habit-stats buffer, view previous habit in file or agenda."
+  (interactive)
+  (if (not (derived-mode-p 'org-habit-stats-mode))
+      (user-error "Not in an org-habit-stats-mode buffer")
+    (org-habit-stats-exit)
+    (if (eq org-habit-stats-habit-source 'agenda)
+        (progn (org-agenda-previous-item)
+               (org-habit-stats-view-previous-habit-in-agenda))
+      (outline-previous-heading)
+      (org-habit-stats-view-previous-habit-in-buffer))))
+
+(defun org-habit-stats--agenda-item-is-habit-p ()
+  "Check if current agenda item is a habit."
+  (save-window-excursion
+    (org-agenda-switch-to)
+    (org-is-habit-p (point))))
+
+;;;###autoload
+(defun org-habit-stats-view-habit-at-point-agenda ()
+  "Open an org-habit-stats buffer for the habit at point in agenda buffer."
+  (interactive)
+  (if (not (derived-mode-p org-agenda-mode))
+      (user-error "Not in agenda buffer")
+    (let (is-habit habit-name habit-data habit-description)
+      (save-window-excursion
+        (org-agenda-switch-to)
+        (setq is-habit (org-is-habit-p (point)))
+        (when is-habit
+          (setq habit-name (org-element-property :raw-value (org-element-at-point))
+                habit-data (org-habit-stats-parse-todo (point))
+                habit-description (org-entry-get (point) "DESCRIPTION"))))
+      (when is-habit
+        (org-habit-stats-create-habit-buffer habit-data habit-name habit-description 'agenda)))))
+
+;;;###autoload
+(defun org-habit-stats-view-next-habit-in-agenda ()
+  "View next habit in the current org agenda buffer."
+  (interactive)
+  (if (not (derived-mode-p org-agenda-mode))
+      (user-error "Not in agenda buffer")
+  (let ((orig-pos (point))
+        habit-pos)
+    (while (and (< (point) (point-max))
+                (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
+      (agenda-next-item))
+    (when (not habit-pos)
+      (beginning-of-buffer)
+      (while (and (< (point) orig-pos)
+                  (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
+        (agenda-next-item)))
+    (if habit-pos
+        (org-habit-stats-view-habit-at-point-agenda)
+      (user-error "No habits found in agenda buffer")))))
+
+;;;###autoload
+(defun org-habit-stats-view-previous-habit-in-agenda ()
+  "View previous habit in the current org agenda buffer."
+  (interactive)
+  (if (not (derived-mode-p org-agenda-mode))
+      (user-error "Not in agenda buffer")
+    (let ((orig-pos (point))
+          habit-pos)
+      (while (and (> (point) (point-min))
+                  (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
+        (agenda-previous-item))
+      (when (not habit-pos)
+        (end-of-buffer)
+        (while (and (> (point) orig-pos)
+                    (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
+          (agenda-previous-item)))
+      (if habit-pos
+          (org-habit-stats-view-habit-at-point-agenda)
+        (user-error "No habits found in agenda buffer")))))
 
 ;;;###autoload
 (defun org-habit-stats-exit ()
@@ -1420,7 +1548,7 @@ habit data getting truncated."
   (setq buffer-read-only nil
         buffer-undo-list t
         indent-tabs-mode nil)
-  (make-local-variable 'current-org-habit)
+  (make-local-variable 'org-habit-stats-habit-source)
   (make-local-variable 'org-habit-stats-stat-bounds)
   (make-local-variable 'org-habit-stats-calendar-bounds)
   (make-local-variable 'org-habit-stats-graph-bounds)
