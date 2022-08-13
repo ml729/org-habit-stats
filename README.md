@@ -36,7 +36,7 @@ Bind these to keys of your choosing.
 The built-in keybindings for the org-habit-stats buffer are
 
 | Key   | Command                                            |
-|------------------------------------------------------------|
+|-------|----------------------------------------------------|
 | q     | org-habit-stats-exit                               |
 | <     | org-habit-stats-calendar-scroll-left               |
 | >     | org-habit-stats-calendar-scroll-left               |
