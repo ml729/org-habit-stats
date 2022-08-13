@@ -37,14 +37,13 @@
 (require 'seq)
 
 (defgroup org-habit-stats nil
-  "Tempo templates/snippets with in-buffer field editing."
+  "Visualize your org-habits."
   :group 'org-progress
   :prefix "org-habit-stats-")
 
 ;;; Defcustoms
 (defcustom org-habit-stats-include-uncompleted-today nil
-  "If a habit is uncompleted today, whether or not to include
-today in statistics."
+  "If a habit is not done today, whether or not to include today."
   :group 'org-habit-stats
   :type 'boolean)
 
@@ -186,6 +185,18 @@ replacing whitespace with underscores) in properties."
   :group 'org-habit-stats
   :type '(alist :key-type function :value-type string))
 
+(setq org-habit-stats-stat-functions-alist
+'((org-habit-stats-streak . "Current Streak")
+    (org-habit-stats-exp-smoothing-list-today . "Habit Strength")
+    (org-habit-stats-record-streak-days . "Record Streak")
+    (org-habit-stats-record-streak-date . "Record Date")
+    (org-habit-stats-30-day-total . "30 day total")
+    (org-habit-stats-30-day-percentage . "30 day percentage")
+    (org-habit-stats-alltime-total . "Total Completions")
+    (org-habit-stats-alltime-percentage . "Total Percentage"))
+
+      )
+
 (defcustom org-habit-stats-message-functions-list
   '(org-habit-stats-streak-message
     org-habit-stats-unstreak-message
@@ -273,13 +284,12 @@ max number of bars to show at a time."
   :group 'org-habit-stats
   :type 'boolean)
 
-(setq org-habit-stats-show-blank-when-new-habit nil)
 (defcustom org-habit-stats-new-habit-message "A new habit."
   "Message to display when habit has 0 completions logged."
   :group 'org-habit-stats
   :type 'boolean)
 
-(defcustom org-habit-stats-calendar-dont-highlight-whitespace t
+(defcustom org-habit-stats-calendar-dont-highlight-whitespace nil
   "If t, don't highlight whitespace padding in calendar dates."
   :group 'org-habit-stats
   :type 'boolean)
@@ -305,11 +315,6 @@ max number of bars to show at a time."
 
 (defvar org-habit-stats-graph-current-func nil
   "Current graph function used in org habit stats buffer.")
-
-(defvar org-habit-stats-graph-text-alist
-  '(org-habit-stats-graph-monthly-completions . ("Monthly Completions" "Months" "Completions"))
-  "Alist mapping graph functions to a list containing the graph title,
-x-axis name, y-axis name.")
 
 ;;; Faces
 (defface org-habit-stats-message-positive
@@ -399,6 +404,17 @@ This returns the reverse of calling
   (reverse (org-habit-stats-get-full-history-new-to-old history)))
 
 (defun org-habit-stats-get-repeat-history-old-to-new (habit-data)
+  "Return the history of a habit accounting for the repeat interval.
+
+HABIT-DATA contains the result of calliing
+`org-habit-stats-parse-todo' on a habit.
+
+It modifies the full history of a habit (see
+`org-habit-stats-get-full-history-new-to-old') by removing
+certain days without completions.  For ++n or +n style habits,
+misses occuring n-1 days after a scheduled date are removed.  For
+.+n style habits, misses occuring n-1 days after a completed day
+are removed."
   (let* ((partial-history (nth 4 habit-data))
          (repeat-type (nth 5 habit-data))
          (repeat-len (nth 1 habit-data))
@@ -453,7 +469,8 @@ history, returns 0."
 (defun org-habit-stats--record-streak-full (history history-rev &optional habit-data)
   "Returns (record-streak . record-day).
 
-If the record streak occurs on multiple days, returns the earliest one."
+The record-day is the last day of the record streak. If the
+record streak occurs on multiple days, return the earliest one."
   (let ((record-streak 0)
         (record-day (org-today))
         (curr-streak 0)
@@ -470,7 +487,7 @@ If the record streak occurs on multiple days, returns the earliest one."
           (setq curr-streak 0))
         (when (> curr-streak record-streak)
           (setq record-streak curr-streak)
-          (setq record-day curr-streak-start))))
+          (setq record-day (+ curr-streak-start curr-streak -1)))))
     (cons record-streak record-day)))
 
 (defun org-habit-stats--single-whitespace-only (s)
@@ -608,7 +625,9 @@ https://stackoverflow.com/a/6050245"
          (record-day (cdr record-data))
          (record-streak (car record-data)))
     (when (and (= curr-streak record-streak)
-               (/= record-day (org-today)))
+               (>= curr-streak 5)
+               (/= record-day (org-today))
+               (/= record-day (1- (org-today))))
       (propertize org-habit-stats-comeback-message
                   'face 'org-habit-stats-message-positive))))
 
@@ -1241,7 +1260,9 @@ display to MAX, and sort lists with SORT-PRED if desired."
 
 ;;; Create org-habit-stats buffer
 (defun org-habit-stats--insert-divider ()
-  (insert (make-string (max 80 (window-width)) org-agenda-block-separator))
+  (insert (make-string 80
+           ;; (max 80 (window-width))
+           org-agenda-block-separator))
   (insert (make-string 1 ?\n)))
 
 (defun org-habit-stats-insert-section-header (name)
@@ -1271,10 +1292,14 @@ display to MAX, and sort lists with SORT-PRED if desired."
       (org-habit-stats-draw-graph history history-rev habit-data))))
 
 (defun org-habit-stats-create-habit-buffer (habit-data habit-name habit-description habit-source)
-  "Creates buffer displaying statistics, calendar, and graphs.
-    Calendar where days habit is done are marked Graph of habit
-   - score or histogram of habit totals monthly/weekly Various
-   - habit statistics"
+  "Create buffer displaying statistics, a calendar, and a bar graph.
+
+HABIT-DATA contains results from `org-habit-stats-parse-todo`.
+The name of the habit HABIT-NAME and description
+HABIT-DESCRIPTION are displayed at the top of the buffer. The
+HABIT-SOURCE is either 'agenda or 'file, indicating what kind of
+buffer the habit was located in. This is used by commands that
+navigate between habits."
   (let* ((buff (current-buffer))
          (history (org-habit-stats-get-repeat-history-old-to-new habit-data))
          (history-rev (reverse history)))
