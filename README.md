@@ -34,6 +34,7 @@ Bind these to keys of your choosing.
 ```
 
 The built-in keybindings for the org-habit-stats buffer are
+
 | Key   | Command                                            |
 |------------------------------------------------------------|
 | q     | org-habit-stats-exit                               |
