@@ -80,12 +80,13 @@ Graph functions must return a pair `(LABELS . VALUES)`, where LABELS is a list o
 The Habit Strength score $S_n$ uses a modified form of exponential smoothing (inspired by Loop Habit Tracker's score).
 The formula is
 
-$$S_0 = 0$$
-
-$$S_{n} = \begin{cases}
+$$\begin{align*}
+S_0 &= 0 \\
+S_{n} &= \begin{cases}
 (1-\alpha)S_{n-1} + \alpha, & \text{if the habit was completed on Day n} \\
 (1-\beta)S_{n-1}, & \text{otherwise}
-\end{cases}$$
+\end{cases}
+\end{align*}$$
 
 where $\alpha, \beta \in [0,1]$.
 
