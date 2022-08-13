@@ -80,7 +80,7 @@ Graph functions must return a pair `(LABELS . VALUES)`, where LABELS is a list o
 The Habit Strength score uses a modified form of exponential smoothing (inspired by Loop Habit Tracker's score).
 The formula is
 
-$S_{n} = \begin{cases}(1-\alpha)S_{n} + \alpha & \text{if the habit was completed on Day n}\\(1-\beta)S_{n} & \text{otherwise}\end{cases}$
+$$S_{n} = \begin{cases}(1-\alpha)S_{n} + \alpha & \text{if the habit was completed on Day n}\\(1-\beta)S_{n} & \text{otherwise}\end{cases}$$
 
 
 where $\alpha, \beta \in [0,1]$.
@@ -92,7 +92,7 @@ $\beta$ is exactly how much the score decreases (in percent) for each miss. For 
 
 By default, $\alpha = 0.052$ is calibrated so that $66$ consecutive completions reaches a habit strength of $97$ (based on the idea that it takes 66 days to form a habit).
 To calibrate it such that $N$ consecutive completions reaches a habit strength of $S$, use the following formula:
-$\alpha = 1 - \sqrt[n]{1 - \frac{S}{100}$
+$\alpha = 1 - \sqrt[n]{1 - \frac{S}{100}}$
 
 # Contribution
 I might try to get this package on ELPA, so any significant contributions (at least 15 LOC) requires copyright assignment to the FSF.
