@@ -77,12 +77,13 @@ Message functions must return a string or nil. If it returns nil, no message wil
 Graph functions must return a pair `(LABELS . VALUES)`, where LABELS is a list of strings to be used as bar labels and VALUES is a list of numbers to be used as the bar sizes.
 
 ## The Habit Strength score
-The Habit Strength score uses a modified form of exponential smoothing (inspired by Loop Habit Tracker's score).
+The Habit Strength score $S_n$ uses a modified form of exponential smoothing (inspired by Loop Habit Tracker's score).
 The formula is
 
+$$S_0 = 0$$
 $$S_{n} = \begin{cases}
-(1-\alpha)S_{n} + \alpha, & \text{if the habit was completed on Day n} \\
-(1-\beta)S_{n}, & \text{otherwise}
+(1-\alpha)S_{n-1} + \alpha, & \text{if the habit was completed on Day n} \\
+(1-\beta)S_{n-1}, & \text{otherwise}
 \end{cases}$$
 
 where $\alpha, \beta \in [0,1]$.
