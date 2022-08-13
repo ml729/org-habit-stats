@@ -65,9 +65,9 @@ All three types of functions must have the same function signature:
 ``` emacs-lisp
 (defun your-new-function (history history-rev habit-data))
 ```
-`history` contains a list of pairs (date . completed) where date is represented as the number of days since December 31, 1 BC (as is used by many org-mode functions) and completed is 1 if the habit was completed that day, and 0 otherwise.
-`history-rev` is the reverse of `history`.
-`habit-data` is the result of running `org-habit-parse-todo` on a habit. From the docstring for `org-habit-parse-todo`:
+- `history` contains a list of pairs (date . completed) where date is represented as the number of days since December 31, 1 BC (as is used by many org-mode functions) and completed is 1 if the habit was completed that day, and 0 otherwise.
+- `history-rev` is the reverse of `history`.
+- `habit-data` is the result of running `org-habit-parse-todo` on a habit. From the docstring for `org-habit-parse-todo`:
 
 ### Adding statistics functions
 Statistics functions must return a number or string.
@@ -79,13 +79,17 @@ Graph functions must return a pair `(LABELS . VALUES)`, where LABELS is a list o
 ## The Habit Strength score:
 The Habit Strength score uses a modified form of exponential smoothing (inspired by Loop Habit Tracker's score).
 The formula is
-$S_{n} = \begin{cases}
-        (1-\alpha)S_{n} + \alpha & \text{if the habit was completed on Day n}\\
-        (1-\beta)S_{n} & \text{otherwise}
-    \end{cases}$
+
+$S_{n} = \begin{cases}(1-\alpha)S_{n} + \alpha & \text{if the habit was completed on Day n}\\(1-\beta)S_{n} & \text{otherwise}\end{cases}$
+
+
 where $\alpha, \beta \in [0,1]$.
+
+
 $\alpha$ determines (roughly) how much each successful completion contributes to the score. At the extremes, $\alpha=0$ means completing the habit has no effect on the score and $\alpha=1$ means completing the habit gives the maximum score of $100$.
+
 $\beta$ is exactly how much the score decreases (in percent) for each miss. For instance, $\beta = 0.2$ means the score decreases by $20\%$ each day you miss the habit. At the extremes, $\beta = 0$ means misses don't affect the score at all, and $\beta=1$ means misses resets the score to $0$.
+
 By default, $\alpha = 0.052$ is calibrated so that $66$ consecutive completions reaches a habit strength of $97$ (based on the idea that it takes 66 days to form a habit).
 To calibrate it such that $N$ consecutive completions reaches a habit strength of $S$, use the following formula:
 $\alpha = 1 - \sqrt[n]{1 - \frac{S}{100}$
@@ -95,4 +99,5 @@ I might try to get this package on ELPA, so any significant contributions (at le
 
 # Acknowledgements
 Powered by the wonderful built-in packages calendar.el and chart.el.
+
 Inspired by the awesome free and open source app [Loop Habit Tracker](https://github.com/iSoron/uhabits).
