@@ -100,7 +100,7 @@ $\beta$ is exactly how much the score decreases (in percent) for each miss. For 
 
 By default, $\alpha = 0.052$ is calibrated so that $66$ consecutive completions reaches a habit strength of $97$ (based on the idea that it takes 66 days to form a habit).
 
-To calibrate it such that $N$ consecutive completions reaches a habit strength of $S$, use the following formula:
+To calibrate it such that $n$ consecutive completions reaches a habit strength of $S$, use the following formula:
 
 $$\alpha = 1 - \sqrt[n]{1 - S}$$
 
@@ -111,3 +111,6 @@ I might try to get this package on ELPA, so any significant contributions (at le
 Powered by the wonderful built-in packages calendar.el and chart.el.
 
 Inspired by the awesome free and open source app [Loop Habit Tracker](https://github.com/iSoron/uhabits).
+
+# License
+GPLv3
