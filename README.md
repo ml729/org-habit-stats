@@ -35,7 +35,7 @@ Bind these to keys of your choosing.
 
 The built-in keybindings for the org-habit-stats buffer are
 | Key   | Command                                            |
-|-------+----------------------------------------------------|
+|------------------------------------------------------------|
 | q     | org-habit-stats-exit                               |
 | <     | org-habit-stats-calendar-scroll-left               |
 | >     | org-habit-stats-calendar-scroll-left               |
@@ -78,6 +78,9 @@ Graph functions must return a pair `(LABELS . VALUES)`, where LABELS is a list o
 
 ## The Habit Strength score
 The Habit Strength score $S_n$ uses a modified form of exponential smoothing (inspired by Loop Habit Tracker's score).
+$S_n$ is always bound within $[0,1]$ and is a weighted sum of all (in)completions in the habit history, with more recent (in)completions carrying more weight.
+(Note that in the org-habit-stats buffer, the displayed habit strength is $100S_n$.)
+
 The formula is
 
 $$\begin{align*}
@@ -98,7 +101,7 @@ By default, $\alpha = 0.052$ is calibrated so that $66$ consecutive completions 
 
 To calibrate it such that $N$ consecutive completions reaches a habit strength of $S$, use the following formula:
 
-$$\alpha = 1 - \sqrt[n]{1 - \frac{S}{100}}$$
+$$\alpha = 1 - \sqrt[n]{1 - S}$$
 
 # Contribution
 I might try to get this package on ELPA, so any significant contributions (at least 15 LOC) requires copyright assignment to the FSF.
