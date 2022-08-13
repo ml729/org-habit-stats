@@ -81,13 +81,13 @@ The Habit Strength score $S_n$ uses a modified form of exponential smoothing (in
 The formula is
 
 $$S_0 = 0$$
+
 $$S_{n} = \begin{cases}
 (1-\alpha)S_{n-1} + \alpha, & \text{if the habit was completed on Day n} \\
 (1-\beta)S_{n-1}, & \text{otherwise}
 \end{cases}$$
 
 where $\alpha, \beta \in [0,1]$.
-
 
 $\alpha$ determines (roughly) how much each successful completion contributes to the score. At the extremes, $\alpha=0$ means completing the habit has no effect on the score and $\alpha=1$ means completing the habit gives the maximum score of $100$.
 
@@ -96,7 +96,8 @@ $\beta$ is exactly how much the score decreases (in percent) for each miss. For 
 By default, $\alpha = 0.052$ is calibrated so that $66$ consecutive completions reaches a habit strength of $97$ (based on the idea that it takes 66 days to form a habit).
 
 To calibrate it such that $N$ consecutive completions reaches a habit strength of $S$, use the following formula:
-$\alpha = 1 - \sqrt[n]{1 - \frac{S}{100}}$
+
+$$\alpha = 1 - \sqrt[n]{1 - \frac{S}{100}}$$
 
 # Contribution
 I might try to get this package on ELPA, so any significant contributions (at least 15 LOC) requires copyright assignment to the FSF.
