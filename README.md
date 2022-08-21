@@ -62,6 +62,8 @@ To automatically add habit stats as properties of the habit item, use the follow
 TODO
 ## Adding your own functions
 You can add your own statistics, graph, and message functions.
+After writing your function, you must add it to the appropriate (a)list with the required information. (See below for more details.)
+
 All three types of functions must have the same function signature:
 ``` emacs-lisp
 (defun your-new-function (history history-rev habit-data))
@@ -72,10 +74,37 @@ All three types of functions must have the same function signature:
 
 ### Adding statistics functions
 Statistics functions must return a number or string.
+
+After creating your stat function, add it to `org-habit-stats-stat-function-alist` along with a human readable name:
+``` emacs-lisp
+(add-to-list 'org-habit-stats-stat-function-alist 
+'(my-new-stat-function . "Stat Name Here"))
+```
+
 ### Adding message functions
 Message functions must return a string or nil. If it returns nil, no message will be displayed. This allows messages to be used for rewards, encouraging messages, etc.
+
+After creating your message function, add it to `org-habit-stats-message-function-list`:
+``` emacs-lisp
+(add-to-list 'org-habit-stats-message-function-list
+ 'my-new-message-function)
+```
+
 ### Adding graph functions
 Graph functions must return a pair `(LABELS . VALUES)`, where LABELS is a list of strings to be used as bar labels and VALUES is a list of numbers to be used as the bar sizes.
+
+After creating your graph function, add it to ` 'org-habit-stats-graph-function-list`. 
+``` emacs-lisp
+(add-to-list 'org-habit-stats-graph-function-list
+ (my-new-graph-function . (:key "a"
+                                                    :title "Title of bar graph here"
+                                                    :x-label "x-axis label here"
+                                                    :y-label "y-axis label here"
+                                                    :dir horizontal
+                                                    :max-bars 10)))
+```
+The `dir` property can be either `horizontal` or `vertical`, and determines which direction the bar graphs are drawn.
+The `max-bars` property determines the maximum number of bars to appear in the graph at a time.
 
 ## The Habit Strength score
 The Habit Strength score $S_n$ uses a modified form of exponential smoothing (inspired by Loop Habit Tracker's score).
