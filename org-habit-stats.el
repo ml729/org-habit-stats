@@ -4,9 +4,9 @@
 ;;
 ;; Author: ml729
 ;; Created: October 22, 2021
-;; Version: 0.0.1
-;; Keywords:
-;; Homepage:
+;; Version: 0.1
+;; Keywords: calendar, org-mode, org-habit, habits, stats, statistics, charts, graphs
+;; Homepage: https://github.com/ml729/org-habit-stats/
 ;; Package-Requires: ((emacs "25.1"))
 ;;
 ;; This file is not part of GNU Emacs.
@@ -27,8 +27,7 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; `org-habit-stats' lets you view stats, a calendar, and bar graphs of your
-;; org-habits.
+;; View stats, a calendar, and bar graphs of your org-habits.
 ;;
 ;;; Code:
 
@@ -94,9 +93,6 @@ The default colors are Modus Vivendi's colors for graphs. The original value of
   "How many days to display when graph's x-axis is days."
   :group 'org-habit-stats
   :type 'integer)
-
-(defcustom org-habit-stats-view-order '(statistics graph calendar)
-  "Output from org-habit-parse-todo of currently viewed habit.")
 
 (defcustom org-habit-stats-graph-data-horizontal-char ?-
   "Character used to draw horizontal lines for a graph's data."
@@ -185,18 +181,6 @@ replacing whitespace with underscores) in properties."
   :group 'org-habit-stats
   :type '(alist :key-type function :value-type string))
 
-(setq org-habit-stats-stat-functions-alist
-'((org-habit-stats-streak . "Current Streak")
-    (org-habit-stats-exp-smoothing-list-today . "Habit Strength")
-    (org-habit-stats-record-streak-days . "Record Streak")
-    (org-habit-stats-record-streak-date . "Record Date")
-    (org-habit-stats-30-day-total . "30 day total")
-    (org-habit-stats-30-day-percentage . "30 day percentage")
-    (org-habit-stats-alltime-total . "Total Completions")
-    (org-habit-stats-alltime-percentage . "Total Percentage"))
-
-      )
-
 (defcustom org-habit-stats-message-functions-list
   '(org-habit-stats-streak-message
     org-habit-stats-unstreak-message
@@ -209,7 +193,7 @@ history, and parsed habit data, and returns a string."
 
 (defcustom org-habit-stats-streak-message-alist
   '((10 . "Achieved streak 10! Reward: 20 minutes of reciting the GNU Emacs manuals")
-    (20 . "Achieved streak 20! Reward: 20 minutes of reading sachachua's Emacs News")
+    (20 . "Achieved streak 20! Reward: 20 minutes of reading Sacha Chua's Emacs News")
     (30 . "Achieved streak 30! Reward: 20 minutes of watching Protesilaos talks")
     (40 . "Achieved streak 40! Reward: 20 minutes of trying out the latest (M)ELPA packages")
     (50 . "Achieved streak 50! Reward: 20 minutes of configuring my .emacs.d"))
@@ -219,8 +203,7 @@ Only displays the message when the streak length is exactly that value."
   :type '(alist :key-type integer :value-type string))
 
 (defcustom org-habit-stats-unstreak-message-alist
-  '((10 . "It's never too late to start again.")
-    (20 . ""))
+  '((10 . "It's never too late to start again."))
   "Alist mapping current unstreak length to messages to be displayed.
 An unstreak is the sequence of consecutive misses. Only displays
 the message when the unstreak length is exactly that value."
@@ -682,8 +665,7 @@ HABIT-DATA contains the results of `org-habit-parse-todo`."
       (calendar-generate-window month year)
       (setq org-habit-stats-displayed-month month)
       (setq org-habit-stats-displayed-year year)
-      (org-habit-stats-calendar-mark-habits habit-data)
-      )
+      (org-habit-stats-calendar-mark-habits habit-data))
     (run-hooks 'calendar-initial-window-hook)))
 
 (defun org-habit-stats-refresh-calendar-buffer ()
@@ -978,12 +960,11 @@ customized line drawing characters.
                      val-str dir (/ (+ (car rng) (cdr rng)) 2) (1+ dp) (+ 1 dp (length val-str)))))
                 (if (< dp zp)
                     (chart-deface-rectangle dir rng (cons dp zp) fc)
-                  (chart-deface-rectangle dir rng (cons zp dp) fc))
-                )
+                  (chart-deface-rectangle dir rng (cons zp dp) fc)))
               ;; find the bounds, and chart it!
               ;; for now, only do one!
-	      (setq i (1+ i)
-		    seq (cdr seq)))))
+              (setq i (1+ i)
+                    seq (cdr seq)))))
         (setq data (cdr data))))))
 
 (defun org-habit-stats-chart-draw (c &optional buff)
