@@ -102,7 +102,7 @@ After creating your message function, add it to `org-habit-stats-message-functio
 ### Adding graph functions
 Graph functions must return a pair `(LABELS . VALUES)`, where LABELS is a list of strings to be used as bar labels and VALUES is a list of numbers to be used as the bar sizes.
 
-After creating your graph function, add it to ` 'org-habit-stats-graph-function-list`. 
+After creating your graph function, add it to `org-habit-stats-graph-function-list`. 
 ``` emacs-lisp
 (add-to-list 'org-habit-stats-graph-function-list
  (my-new-graph-function . (:key "a"
