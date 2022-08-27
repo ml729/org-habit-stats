@@ -192,11 +192,11 @@ history, and parsed habit data, and returns a string."
   :type '(list function))
 
 (defcustom org-habit-stats-streak-message-alist
-  '((10 . "Achieved streak 10! Reward: 20 minutes of reciting the GNU Emacs manuals")
-    (20 . "Achieved streak 20! Reward: 20 minutes of reading Sacha Chua's Emacs News")
-    (30 . "Achieved streak 30! Reward: 20 minutes of watching Protesilaos talks")
-    (40 . "Achieved streak 40! Reward: 20 minutes of trying out the latest (M)ELPA packages")
-    (50 . "Achieved streak 50! Reward: 20 minutes of configuring my .emacs.d"))
+  '((10 . "Achieved streak 10! Reward: Study the GNU Emacs manuals")
+    (20 . "Achieved streak 20! Reward: Configure my .emacs.d")
+    (30 . "Achieved streak 30! Reward: Read Sacha Chua's Emacs News")
+    (40 . "Achieved streak 40! Reward: Watch Protesilaos Emacs talks")
+    (50 . "Achieved streak 50! Reward: Try out the latest (M)ELPA packages"))
   "Alist mapping current streak length to messages to be displayed.
 Only displays the message when the streak length is exactly that value."
   :group 'org-habit-stats

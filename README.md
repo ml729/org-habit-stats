@@ -59,7 +59,16 @@ To automatically add habit stats as properties of the habit item, use the follow
 ```
 
 # Customization
-TODO
+## Messages
+Based on the history of a habit, a string (called a "message") may be displayed on a given day. Messages can be used for rewards, encouraging messages, milestone indicators, and more.
+
+Three message functions are provided. (See below for how to add your own message functions.) 
+`org-habit-stats-streak-message` shows a message when the current habit streak reaches certain values. The values and messages can be customized in `org-habit-stats-streak-message-alist`.
+
+`org-habit-stats-unstreak-message` shows a message when the current habit unstreak reaches certain values. The values and messages can be customized in `org-habit-stats-unstreak-message-alist`.
+
+`org-habit-stats-comeback-message` shows a message when the current habit streak reaches the previous record habit streak. The message can be customized in `org-habit-stats-comeback-message`.
+
 ## Adding your own functions
 You can add your own statistics, graph, and message functions.
 After writing your function, you must add it to the appropriate (a)list with the required information. (See below for more details.)
