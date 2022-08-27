@@ -136,7 +136,7 @@ $\alpha$ determines (roughly) how much each successful completion contributes to
 
 $\beta$ is exactly how much the score decreases (in percent) for each miss. For instance, $\beta = 0.2$ means the score decreases by $20\%$ each day you miss the habit. At the extremes, $\beta = 0$ means misses don't affect the score at all, and $\beta=1$ means misses resets the score to $0$.
 
-By default, $\alpha = 0.052$ is calibrated so that $66$ consecutive completions reaches a habit strength of $97$ (based on the idea that it takes 66 days to form a habit).
+By default, $\alpha = 0.052$ is calibrated so that $66$ consecutive completions reaches a habit strength of $97$ (based on the idea that it takes 66 days to form a habit).  $\beta$ is set to $0.1$ by default. (For comparison, Loop Habit Tracker uses $\alpha=\beta \approx 0.052$ for its habit score.)
 
 To calibrate it such that $n$ consecutive completions reaches a habit strength of $S$, use the following formula:
 
