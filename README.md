@@ -16,7 +16,7 @@ This package is not yet available on (M)ELPA.
 Clone this repo to `~/.emacs.d/site-lisp/`.
 Then add this to your config:
 ``` emacs-lisp
-(load "org-habit-stats")
+(load "org-habit-stats/org-habit-stats")
 ```
 
 ## Doom Emacs:
