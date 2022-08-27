@@ -29,7 +29,7 @@ Use `org-habit-stats-view-habit-at-point` inside org-mode files to view the stat
 Use `org-habit-stats-view-habit-at-point-agenda` inside org-agenda buffers.
 Bind these to keys of your choosing.
 ``` emacs-lisp
-(define-key org-agenda-mode-map (kbd "C-c h") 'org-habit-stats-view-habit-at-point)
+(define-key org-mode-map (kbd "C-c h") 'org-habit-stats-view-habit-at-point)
 (define-key org-agenda-mode-map (kbd "H") 'org-habit-stats-view-habit-at-point-agenda)
 ```
 
