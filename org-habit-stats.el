@@ -408,29 +408,19 @@ are removed."
           ((or (string= repeat-type "++")
                (string= repeat-type "+"))
            (dolist (x full-history (reverse new-history))
+             ;; if a date minus next scheduled is nonzero mod repeat-len, and is incomplete, remove it
              (when (not (and (= 0 (cdr x))
                              (/= 0 (mod (- next-scheduled (car x)) repeat-len))))
-               (push x new-history)))
-           ;; (seq-filter (lambda (x) (and (= 0 (cdr x))
-           ;;                              (/= 0 (mod (- next-scheduled (car x) repeat-len)))))
-           ;;             full-history)
-           ;; use next scheduled
-           ;; iterate through full-history
-           ;; if a date minus next scheduled is nonzero mod repeat-len, and is incomplete, remove it
-           )
+               (push x new-history))))
           ((string= repeat-type ".+")
            (let ((most-recent-complete (caar full-history)))
              (dolist (x full-history (reverse new-history))
                (when (= 1 (cdr x))
                    (setq most-recent-complete (car x)))
+               ;; if incomplete, and difference from prev completion is nonzero mod repeat len, remove it
                (when (not (and (= 0 (cdr x))
                              (/= 0 (mod (- (car x) most-recent-complete) repeat-len))))
-                 (push x new-history))))
-           ;; iterate through full-history
-           ;; local variable for most recent completion
-           ;; if incomplete, and difference from prev completion is nonzero mod repeat len, remove it
-           ;; just construct a new list, more efficient
-           )
+                 (push x new-history)))))
           (t (error (format "Invalid repeat type %s" repeat-type))))))
   (defun org-habit-stats--streak (h)
     (if (and h (= (cdr (pop h)) 1))
