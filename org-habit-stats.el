@@ -34,6 +34,7 @@
 (require 'org-habit)
 (require 'cl-lib)
 (require 'seq)
+(require 'chart)
 
 (defgroup org-habit-stats nil
   "Visualize your org-habits."
@@ -296,7 +297,7 @@ max number of bars to show at a time."
   "How many bars to shift left when the bar graph is truncated.")
 
 (defvar org-habit-stats-graph-face-list nil
-  "Faces used for bars in graphs, generated from org-habit-stats-graph-colors-list.")
+  "Faces used for bars in graphs, generated from `org-habit-stats-graph-colors-list'.")
 
 (defvar org-habit-stats-graph-current-func nil
   "Current graph function used in org habit stats buffer.")
@@ -525,8 +526,8 @@ record streak occurs on multiple days, return the earliest one."
 
 (defun org-habit-stats--exp-smoothing-list-full (history history-rev habit-data)
   "Returns score for a binary list HISTORY, computed via
-   exponential smoothing. (Inspired by the GPLv3 Loop Habit
-   Tracker app's score.)"
+exponential smoothing. (Inspired by the GPLv3 Loop Habit Tracker
+app's score.)"
   (if (not history) nil
     (let* ((scores '())
            (alpha org-habit-stats-exp-smoothing-alpha)
@@ -826,7 +827,7 @@ the second containing the corresponding counts per category."
          :initform "Data"))
   "Class used for all data in different charts, originally defined in charts.el as 'chart-sequence'.
    In some earlier versions of Emacs the name of this class
-   contains a typo ('chart-sequece') so we redefine it here under
+   contains a typo (chart-sequece) so we redefine it here under
    a new name.")
 
 (defun org-habit-stats-graph-create-faces ()
