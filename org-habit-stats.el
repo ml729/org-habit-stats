@@ -298,7 +298,8 @@ max number of bars to show at a time."
   "How many bars to shift left when the bar graph is truncated.")
 
 (defvar org-habit-stats-graph-face-list nil
-  "Faces used for bars in graphs, generated from `org-habit-stats-graph-colors-list'.")
+  "Faces used for bars in graphs, generated from
+`org-habit-stats-graph-colors-list'.")
 
 (defvar org-habit-stats-graph-current-func nil
   "Current graph function used in org habit stats buffer.")
@@ -898,11 +899,13 @@ If ALIGN-LEFT non-nil, it is aligned left."
 
 (cl-defmethod org-habit-stats-chart-draw-data ((c chart-bar))
   "Display the data available in a bar chart C, maybe label with exact values.
-This function is mostly the same as chart.el's `chart-draw-data`, with the following modifications:
-1. chart-draw-line is replaced with org-habit-stats-chart-draw-line, which supports user
-customized line drawing characters.
-2. For horizontal charts, the rightmost vertical line spans the entire bar height.
-3. If `org-habit-stats-chart-draw-values` is t, puts the exact value of a bar next to it.''''"
+This function is mostly the same as chart.el's `chart-draw-data`,
+with the following modifications: 1. chart-draw-line is replaced
+with org-habit-stats-chart-draw-line, which supports user
+customized line drawing characters. 2. For horizontal charts, the
+rightmost vertical line spans the entire bar height. 3. If
+`org-habit-stats-chart-draw-values` is t, puts the exact value of
+a bar next to it.''''"
   (cl-flet ((chart-draw-line (dir zone start end) (org-habit-stats-chart-draw-line-data
                                                    dir zone start end)))
     (let* ((data (oref c sequences))
@@ -986,8 +989,8 @@ Begins at line LINE."
          (newend (min (+ offset max) (length seq))))
     (if (>= newbeg 0)
         (if end
-            (subseq seq (- newend) (if (> newbeg 0) (- newbeg)))
-          (subseq seq newbeg newend))
+            (seq-subseq seq (- newend) (if (> newbeg 0) (- newbeg)))
+          (seq-subseq seq newbeg newend))
       seq)))
 
 (cl-defmethod org-habit-stats-chart-trim-offset ((c chart) max offset end)
@@ -1385,7 +1388,7 @@ habit data getting truncated."
                 (not (setq habit-pos (org-is-habit-p (point)))))
       (outline-next-heading))
     (when (not habit-pos)
-      (beginning-of-buffer)
+      (goto-char (point-min))
       (outline-next-heading)
       (while (and (< (point) orig-pos)
                   (not (setq habit-pos (org-is-habit-p (point)))))
