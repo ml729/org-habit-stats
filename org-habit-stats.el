@@ -1,4 +1,4 @@
-;;; org-habit-stats.el --- display info about habits  -*- lexical-binding: t; -*-
+;;; org-habit-stats.el --- Display info about habits  -*- lexical-binding: t; -*-
 ;;
 ;; Copyright (C) 2022 ml729
 ;;
@@ -27,8 +27,9 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
+
 ;; View stats, a calendar, and bar graphs of your org-habits.
-;;
+
 ;;; Code:
 
 (require 'org-habit)

@@ -21,7 +21,7 @@ Then add this to your config:
 
 ## Doom Emacs:
 ``` emacs-lisp
-(package! org-habit-stats :recipe (:host github :repo "ml729/org-habit-stats/"))
+(package! org-habit-stats :recipe (:host github :repo "ml729/org-habit-stats"))
 ```
 
 # Usage
