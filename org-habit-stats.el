@@ -305,6 +305,17 @@ max number of bars to show at a time."
 (defvar org-habit-stats-graph-current-func nil
   "Current graph function used in org habit stats buffer.")
 
+(defvar-local org-habit-stats-habit-source nil)
+(defvar-local org-habit-stats-stat-bounds nil)
+(defvar-local org-habit-stats-calendar-bounds nil)
+(defvar-local org-habit-stats-message-bounds nil)
+(defvar-local org-habit-stats-graph-bounds nil)
+(defvar-local org-habit-stats-current-habit-data nil)
+(defvar-local org-habit-stats-current-habit-name nil)
+(defvar-local org-habit-stats-current-habit-description nil)
+(defvar-local org-habit-stats-current-history nil)
+(defvar-local org-habit-stats-current-history-rev nil)
+
 ;;; Faces
 (defface org-habit-stats-message-positive
   '((t (:foreground "#000000" :background "gold2")))
@@ -1280,58 +1291,16 @@ navigate between habits."
   (let* ((buff (current-buffer))
          (history (org-habit-stats-get-repeat-history-old-to-new habit-data))
          (history-rev (reverse history)))
+    (switch-to-buffer (get-buffer-create org-habit-stats-buffer))
+    (org-habit-stats-mode)
     (setq org-habit-stats-habit-source habit-source)
     (setq org-habit-stats-current-history history)
     (setq org-habit-stats-current-history-rev history-rev)
     (setq org-habit-stats-current-habit-data habit-data)
     (setq org-habit-stats-current-habit-name habit-name)
     (setq org-habit-stats-current-habit-description habit-description)
-    (switch-to-buffer (get-buffer-create org-habit-stats-buffer))
-    (org-habit-stats-mode)
     (org-habit-stats--insert-habit-buffer-contents)
     (set-buffer-modified-p nil)))
-
-;; experimental
-(defun org-habit-stats-gnuplot-graph (history history-rev habit-data)
-  (let* ((graph-start (point))
-         (func org-habit-stats-graph-current-func)
-         (func-info (cdr (assoc func org-habit-stats-graph-functions-alist)))
-         (graph-title (plist-get func-info :title))
-         (x-name (plist-get func-info :x-label))
-         (y-name (plist-get func-info :y-label))
-         (dir (plist-get func-info :dir))
-         (max-bars (plist-get func-info :max-bars))
-         (graph-data-names (funcall func history history-rev habit-data))
-         (graph-names (car graph-data-names))
-         (graph-data (cdr graph-data-names)))
-    (insert (make-string 2 ?\n))
-    (org-habit-stats--gnuplot-graph
-     graph-title
-     graph-names
-     x-name
-     graph-data
-     y-name
-     max-bars)))
-
-(defun org-habit-stats--gnuplot-graph (title namelst nametitle numlst numtitle max-bars)
-  (let* ((gnuplot-buf (generate-new-buffer "*Org Habit Stats gnuplot*"))
-         (data-file (make-temp-file "org-habit-stats-gnuplot-graph-data"))
-         (output-file (make-temp-file "org-habit-stats-gnuplot-graph-output")))
-    (with-temp-file data-file
-      (dolist (x (cl-mapcar #'cons namelst numlst))
-        (insert (format "%s %f\n" (car x) (cdr x)))))
-    (with-current-buffer gnuplot-buf
-      (gnuplot-mode)
-      (insert "set term svg\n"
-              (format "set output '%s'\n" output-file)
-              "set boxwidth 0.7\n"
-              "set style fill solid\n"
-              (format "plot '%s' using 2:xtic(1) w boxes\n" data-file))
-      (save-window-excursion (gnuplot-send-buffer-to-gnuplot)))
-    (insert-image (create-image output-file))
-    (delete-file data-file)
-    ;; (delete-file output-file)
-    (kill-buffer gnuplot-buf)))
 
 ;;; Set stats as properties
 (defun org-habit-stats-number-to-string-maybe (x)
@@ -1425,10 +1394,12 @@ habit data getting truncated."
   (interactive)
   (if (not (derived-mode-p 'org-habit-stats-mode))
       (user-error "Not in an org-habit-stats-mode buffer")
-    (org-habit-stats-exit)
     (if (eq org-habit-stats-habit-source 'agenda)
-        (progn (org-agenda-next-item 1)
-               (org-habit-stats-view-next-habit-in-agenda))
+        (progn
+          (org-habit-stats-exit)
+          (org-agenda-next-item 1)
+          (org-habit-stats-view-next-habit-in-agenda))
+      (org-habit-stats-exit)
       (outline-next-heading)
       (org-habit-stats-view-next-habit-in-buffer))))
 
@@ -1438,18 +1409,21 @@ habit data getting truncated."
   (interactive)
   (if (not (derived-mode-p 'org-habit-stats-mode))
       (user-error "Not in an org-habit-stats-mode buffer")
-    (org-habit-stats-exit)
     (if (eq org-habit-stats-habit-source 'agenda)
-        (progn (org-agenda-previous-item 1)
-               (org-habit-stats-view-previous-habit-in-agenda))
+        (progn
+          (org-habit-stats-exit)
+          (org-agenda-previous-item 1)
+          (org-habit-stats-view-previous-habit-in-agenda))
+      (org-habit-stats-exit)
       (outline-previous-heading)
       (org-habit-stats-view-previous-habit-in-buffer))))
 
 (defun org-habit-stats--agenda-item-is-habit-p ()
   "Check if current agenda item is a habit."
-  (save-window-excursion
-    (org-agenda-switch-to)
-    (org-is-habit-p (point))))
+  ;; (save-window-excursion
+  ;;   (org-agenda-switch-to)
+  ;;   (org-is-habit-p (point)))
+  (get-text-property (point) 'org-habit-p))
 
 ;;;###autoload
 (defun org-habit-stats-view-habit-at-point-agenda ()
@@ -1470,6 +1444,9 @@ habit data getting truncated."
       (when is-habit
         (org-habit-stats-create-habit-buffer habit-data habit-name habit-description 'agenda)))))
 
+(defun org-habit-stats-line-number-at-pos ()
+  (string-to-number (format-mode-line "%l")))
+
 ;;;###autoload
 (defun org-habit-stats-view-next-habit-in-agenda ()
   "View next habit in the current org agenda buffer."
@@ -1480,12 +1457,12 @@ habit data getting truncated."
         habit-pos)
     (while (and (< (point) (point-max))
                 (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
-      (org-agenda-next-item 1))
+      (next-line))
     (when (not habit-pos)
       (goto-char (point-min))
       (while (and (< (point) orig-pos)
                   (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
-        (org-agenda-next-item 1)))
+        (next-line)))
     (if habit-pos
         (org-habit-stats-view-habit-at-point-agenda)
       (user-error "No habits found in agenda buffer")))))
@@ -1500,12 +1477,12 @@ habit data getting truncated."
           habit-pos)
       (while (and (> (point) (point-min))
                   (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
-        (org-agenda-previous-item 1))
+        (previous-line))
       (when (not habit-pos)
         (goto-char (point-max))
         (while (and (> (point) orig-pos)
                     (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
-          (org-agenda-previous-item 1)))
+          (previous-line)))
       (if habit-pos
           (org-habit-stats-view-habit-at-point-agenda)
         (user-error "No habits found in agenda buffer")))))
@@ -1558,15 +1535,6 @@ habit data getting truncated."
   (setq buffer-read-only nil
         buffer-undo-list t
         indent-tabs-mode nil)
-  (make-local-variable 'org-habit-stats-habit-source)
-  (make-local-variable 'org-habit-stats-stat-bounds)
-  (make-local-variable 'org-habit-stats-calendar-bounds)
-  (make-local-variable 'org-habit-stats-graph-bounds)
-  (make-local-variable 'org-habit-stats-current-habit-data)
-  (make-local-variable 'org-habit-stats-current-habit-name)
-  (make-local-variable 'org-habit-stats-current-habit-description)
-  (make-local-variable 'org-habit-stats-current-history)
-  (make-local-variable 'org-habit-stats-current-history-rev)
   (setq org-habit-stats-graph-current-offset 0)
   (if org-habit-stats-graph-default-func
         (setq org-habit-stats-graph-current-func org-habit-stats-graph-default-func)
