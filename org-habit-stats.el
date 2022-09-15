@@ -212,7 +212,9 @@ the message when the unstreak length is exactly that value."
 
 (defcustom org-habit-stats-comeback-message
   "Record streak recovered!"
-  "Message to display when record streak is achieved again.")
+  "Message to display when record streak is achieved again."
+  :group 'org-habit-stats
+  :type 'string)
 
 (defcustom org-habit-stats-exp-smoothing-alpha 0.052
   "Weight of completed days for exponential smoothing."
@@ -351,8 +353,8 @@ max number of bars to show at a time."
   :group 'org-habit-stats)
 
 ;; Stats functions
-(defun org-habit-stats-get-full-history-new-to-old (history)
-  "Return the full history of a habit from new to old.
+(defun org-habit-stats-get-full-history-old-to-new (history)
+  "Return the full history of a habit from old to new.
 HISTORY is a list of dates of completions. A date here is the
 number of days since December 31, 1 BC. The returned value is a
 list of dates since the earliest date in history (inclusive)
@@ -363,28 +365,28 @@ If today is marked completed, it is included in the history. If today is
 not marked completed, it is included in the history if and only
 if `org-habit-stats-include-uncompleted-today` is t."
   (let ((today (org-today))
-        (bin-hist nil))
-    (add-to-list 'history (1+ today) t)
+        (bin-hist '())
+        (history (reverse history)))
     (seq-reduce ;;replace with reduce
      (lambda (a b)
-       (push (cons a 1) bin-hist)
-       (setq a (1+ a))
-       (while (< a b)
+         (setq a (1- a))
+       (while (> a b)
          (if (= a today)
              (if org-habit-stats-include-uncompleted-today
                  (push (cons a 0) bin-hist))
            (push (cons a 0) bin-hist))
-         (setq a (1+ a)))
+         (setq a (1- a)))
+       (push (cons b 1) bin-hist)
        b)
-     (cdr history)
-     (car history))
+     history
+     (1+ today))
     bin-hist))
 
-(defun org-habit-stats-get-full-history-old-to-new (history)
+(defun org-habit-stats-get-full-history-new-to-old (history)
   "Return the full history of a habit from old to new.
 This returns the reverse of calling
 `org-habit-stats-get-full-history-new-to-old` on HISTORY."
-  (reverse (org-habit-stats-get-full-history-new-to-old history)))
+  (reverse (org-habit-stats-get-full-history-old-to-new history)))
 
 (defun org-habit-stats-get-repeat-history-old-to-new (habit-data)
   "Return the history of a habit accounting for the repeat interval.
