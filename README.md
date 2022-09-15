@@ -38,8 +38,10 @@ The built-in keybindings for the org-habit-stats buffer are
 | Key   | Command                                            |
 |-------|----------------------------------------------------|
 | q     | org-habit-stats-exit                               |
+| ,     | org-habit-stats-view-previous-habit                |
+| .     | org-habit-stats-view-next-habit                    |
 | <     | org-habit-stats-calendar-scroll-left               |
-| >     | org-habit-stats-calendar-scroll-left               |
+| >     | org-habit-stats-calendar-scroll-right              |
 | C-v   | 'org-habit-stats-calendar-scroll-left-three-months |
 | M-v   | org-habit-stats-calendar-scroll-right-three-months |
 | C-x ] | org-habit-stats-calendar-forward-year              |

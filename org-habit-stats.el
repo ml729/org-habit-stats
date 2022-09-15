@@ -1527,6 +1527,8 @@ habit data getting truncated."
     (define-key map "]" 'org-habit-stats-scroll-graph-right)
     (define-key map "{" 'org-habit-stats-scroll-graph-left-big)
     (define-key map "}" 'org-habit-stats-scroll-graph-right-big)
+    (define-key map "." 'org-habit-stats-view-next-habit)
+    (define-key map "," 'org-habit-stats-view-previous-habit)
     (dolist (x org-habit-stats-graph-functions-alist)
       (let* ((graph-func (car x))
              (graph-key (plist-get (cdr x) :key))
