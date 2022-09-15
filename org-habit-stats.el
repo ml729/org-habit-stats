@@ -33,6 +33,7 @@
 ;;; Code:
 
 (require 'org-habit)
+(require 'org-element)
 (require 'cl-lib)
 (require 'seq)
 (require 'chart)
@@ -527,7 +528,7 @@ record streak occurs on multiple days, return the earliest one."
   (length (nth 4 habit-data)))
 
 (defun org-habit-stats--exp-smoothing-list-full (history history-rev habit-data)
-  "Returns score for a binary list HISTORY, computed via
+  "Return score for a binary list HISTORY, computed via
 exponential smoothing. (Inspired by the GPLv3 Loop Habit Tracker
 app's score.)"
   (if (not history) nil
@@ -563,12 +564,12 @@ https://stackoverflow.com/a/6050245"
 
 (defun org-habit-stats-calculate-stats (history history-rev habit-data)
   (let ((statresults '()))
-  (dolist (x org-habit-stats-stat-functions-alist)
-    (let* ((statfunc (car x))
-           (statname (cdr x))
-           (statresult (if (fboundp statfunc) (funcall statfunc history history-rev habit-data))))
-      (when statresult
-        (push (cons statname statresult) statresults))))
+    (dolist (x org-habit-stats-stat-functions-alist)
+      (let* ((statfunc (car x))
+             (statname (cdr x))
+             (statresult (if (fboundp statfunc) (funcall statfunc history history-rev habit-data))))
+        (when statresult
+          (push (cons statname statresult) statresults))))
     (reverse statresults)))
 
 (defun org-habit-stats-transpose-pair-list (a)
@@ -646,7 +647,7 @@ https://stackoverflow.com/a/6050245"
 
 ;; create calendar buffer, inject text at top, mark custom dates, set so curr month on the right first
 (defun org-habit-stats-make-calendar-buffer (habit-data)
-  "Create a calendar-mode buffer displaying completed days.
+  "Create a `calendar-mode' buffer displaying completed days.
 HABIT-DATA contains the results of `org-habit-parse-todo`."
   ;; (interactive "P")
   ;; (with-current-buffer
@@ -668,8 +669,7 @@ HABIT-DATA contains the results of `org-habit-parse-todo`."
   (with-current-buffer org-habit-stats-calendar-buffer
     (setq buffer-read-only nil)
     (erase-buffer)
-    (let* ((date (calendar-current-date))
-           (month org-habit-stats-displayed-month)
+    (let* ((month org-habit-stats-displayed-month)
            (year org-habit-stats-displayed-year)
            (habit-data org-habit-stats-current-habit-data))
       (calendar-generate-window month year)
@@ -777,7 +777,7 @@ the second containing the corresponding counts per category."
                  (lambda (x y) (funcall predicate-func (car x) (car y)))))))
 
 (defun org-habit-stats-graph-completions-per-month (history history-rev habit-data)
-  "Returns a pair of lists (months . counts)."
+  "Return a pair of lists (months . counts)."
   (org-habit-stats-graph-count-per-category
    history
    (lambda (d) (let ((day (calendar-gregorian-from-absolute d)))
@@ -827,14 +827,13 @@ the second containing the corresponding counts per category."
          :initform nil)
    (name :initarg :name
          :initform "Data"))
-  "Class used for all data in different charts, originally defined in charts.el as 'chart-sequence'.
-   In some earlier versions of Emacs the name of this class
-   contains a typo (chart-sequece) so we redefine it here under
-   a new name.")
+  "Class used for all data in different charts, originally defined
+in charts.el as 'chart-sequence'. In some earlier versions of
+Emacs the name of this class contains a typo (chart-sequece) so
+we redefine it here under a new name.")
 
 (defun org-habit-stats-graph-create-faces ()
-  (let ((light-bg (if (equal (frame-parameter nil 'background-mode) 'light) t nil))
-        (faces ())
+  (let ((faces ())
         newface)
     (dolist (color org-habit-stats-graph-colors-list)
       (setq newface (make-face
@@ -900,7 +899,7 @@ If ALIGN-LEFT non-nil, it is aligned left."
 (cl-defmethod org-habit-stats-chart-draw-data ((c chart-bar))
   "Display the data available in a bar chart C, maybe label with exact values.
 This function is mostly the same as chart.el's `chart-draw-data`,
-with the following modifications: 1. chart-draw-line is replaced
+with the following modifications: 1. `chart-draw-line' is replaced
 with org-habit-stats-chart-draw-line, which supports user
 customized line drawing characters. 2. For horizontal charts, the
 rightmost vertical line spans the entire bar height. 3. If
@@ -1319,7 +1318,7 @@ navigate between habits."
          (data-file (make-temp-file "org-habit-stats-gnuplot-graph-data"))
          (output-file (make-temp-file "org-habit-stats-gnuplot-graph-output")))
     (with-temp-file data-file
-      (dolist (x (mapcar* #'cons namelst numlst))
+      (dolist (x (cl-mapcar #'cons namelst numlst))
         (insert (format "%s %f\n" (car x) (cdr x)))))
     (with-current-buffer gnuplot-buf
       (gnuplot-mode)
@@ -1373,7 +1372,11 @@ habit data getting truncated."
 (defun org-habit-stats-view-habit-at-point ()
   "Open an org-habit-stats buffer for the habit at point in a file."
   (interactive)
-  (let ((habit-name (org-element-property :raw-value (org-element-at-point)))
+  (let ((habit-name (org-element-property :raw-value
+                                          (save-excursion
+                                            (when (not (eq (car (org-element-at-point)) 'headline))
+                                              (outline-previous-heading))
+                                            (org-element-at-point))))
         (habit-data (org-habit-stats-parse-todo (point)))
         (habit-description (org-entry-get (point) "DESCRIPTION")))
     (org-habit-stats-create-habit-buffer habit-data habit-name habit-description 'file)))
@@ -1407,7 +1410,7 @@ habit data getting truncated."
                 (not (setq habit-pos (org-is-habit-p (point)))))
       (outline-previous-heading))
     (when (not habit-pos)
-      (end-of-buffer)
+      (goto-char (point-max))
       (outline-previous-heading)
       (while (and (> (point) orig-pos)
                   (not (setq habit-pos (org-is-habit-p (point)))))
@@ -1424,7 +1427,7 @@ habit data getting truncated."
       (user-error "Not in an org-habit-stats-mode buffer")
     (org-habit-stats-exit)
     (if (eq org-habit-stats-habit-source 'agenda)
-        (progn (org-agenda-next-item)
+        (progn (org-agenda-next-item 1)
                (org-habit-stats-view-next-habit-in-agenda))
       (outline-next-heading)
       (org-habit-stats-view-next-habit-in-buffer))))
@@ -1437,7 +1440,7 @@ habit data getting truncated."
       (user-error "Not in an org-habit-stats-mode buffer")
     (org-habit-stats-exit)
     (if (eq org-habit-stats-habit-source 'agenda)
-        (progn (org-agenda-previous-item)
+        (progn (org-agenda-previous-item 1)
                (org-habit-stats-view-previous-habit-in-agenda))
       (outline-previous-heading)
       (org-habit-stats-view-previous-habit-in-buffer))))
@@ -1452,13 +1455,15 @@ habit data getting truncated."
 (defun org-habit-stats-view-habit-at-point-agenda ()
   "Open an org-habit-stats buffer for the habit at point in agenda buffer."
   (interactive)
-  (if (not (derived-mode-p org-agenda-mode))
+  (if (not (derived-mode-p 'org-agenda-mode))
       (user-error "Not in agenda buffer")
     (let (is-habit habit-name habit-data habit-description)
       (save-window-excursion
         (org-agenda-switch-to)
         (setq is-habit (org-is-habit-p (point)))
         (when is-habit
+          (when (not (eq (car (org-element-at-point)) 'headline))
+              (outline-previous-heading))
           (setq habit-name (org-element-property :raw-value (org-element-at-point))
                 habit-data (org-habit-stats-parse-todo (point))
                 habit-description (org-entry-get (point) "DESCRIPTION"))))
@@ -1469,18 +1474,18 @@ habit data getting truncated."
 (defun org-habit-stats-view-next-habit-in-agenda ()
   "View next habit in the current org agenda buffer."
   (interactive)
-  (if (not (derived-mode-p org-agenda-mode))
+  (if (not (derived-mode-p 'org-agenda-mode))
       (user-error "Not in agenda buffer")
   (let ((orig-pos (point))
         habit-pos)
     (while (and (< (point) (point-max))
                 (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
-      (agenda-next-item))
+      (org-agenda-next-item 1))
     (when (not habit-pos)
-      (beginning-of-buffer)
+      (goto-char (point-min))
       (while (and (< (point) orig-pos)
                   (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
-        (agenda-next-item)))
+        (org-agenda-next-item 1)))
     (if habit-pos
         (org-habit-stats-view-habit-at-point-agenda)
       (user-error "No habits found in agenda buffer")))))
@@ -1489,18 +1494,18 @@ habit data getting truncated."
 (defun org-habit-stats-view-previous-habit-in-agenda ()
   "View previous habit in the current org agenda buffer."
   (interactive)
-  (if (not (derived-mode-p org-agenda-mode))
+  (if (not (derived-mode-p 'org-agenda-mode))
       (user-error "Not in agenda buffer")
     (let ((orig-pos (point))
           habit-pos)
       (while (and (> (point) (point-min))
                   (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
-        (agenda-previous-item))
+        (org-agenda-previous-item 1))
       (when (not habit-pos)
-        (end-of-buffer)
+        (goto-char (point-max))
         (while (and (> (point) orig-pos)
                     (not (setq habit-pos (org-habit-stats--agenda-item-is-habit-p))))
-          (agenda-previous-item)))
+          (org-agenda-previous-item 1)))
       (if habit-pos
           (org-habit-stats-view-habit-at-point-agenda)
         (user-error "No habits found in agenda buffer")))))
