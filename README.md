@@ -106,18 +106,18 @@ After creating your graph function, add it to `org-habit-stats-graph-function-li
 ``` emacs-lisp
 (add-to-list 'org-habit-stats-graph-function-list
  (my-new-graph-function . (:key "a"
-                                                    :title "Title of bar graph here"
-                                                    :x-label "x-axis label here"
-                                                    :y-label "y-axis label here"
-                                                    :dir horizontal
-                                                    :max-bars 10)))
+                           :title "Title of bar graph here"
+                           :x-label "x-axis label here"
+                           :y-label "y-axis label here"
+                           :dir horizontal
+                           :max-bars 10)))
 ```
 The `dir` property can be either `horizontal` or `vertical`, and determines which direction the bar graphs are drawn.
 The `max-bars` property determines the maximum number of bars to appear in the graph at a time.
 
 ## The Habit Strength score
 The Habit Strength score $S_n$ uses a modified form of exponential smoothing (inspired by Loop Habit Tracker's score).
-$S_n$ is always bound within $[0,1]$ and is a weighted sum of all (in)completions in the habit history, with more recent (in)completions carrying more weight.
+$S_n$ is always bound within $[0,1]$ and is a weighted sum of all completions in the habit history, with more recent completions carrying more weight.
 (Note that in the org-habit-stats buffer, the displayed habit strength is $100S_n$.)
 
 The formula is
