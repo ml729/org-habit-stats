@@ -315,6 +315,8 @@ max number of bars to show at a time."
 (defvar-local org-habit-stats-current-habit-description nil)
 (defvar-local org-habit-stats-current-history nil)
 (defvar-local org-habit-stats-current-history-rev nil)
+(defvar-local org-habit-stats-current-buffer nil)
+(defvar-local org-habit-stats-current-calendar-buffer nil)
 
 ;;; Faces
 (defface org-habit-stats-message-positive
@@ -566,7 +568,7 @@ KEY-FUNC to produce keys for hash table. Credit to
 https://stackoverflow.com/a/6050245"
   (let ((h (make-hash-table :test 'equal))
         (freqs nil)
-        (value-func (if value-func value-func (lambda (x) 1))))
+        (value-func (if value-func value-func (lambda (_) 1))))
     (dolist (x seq)
       (let ((key (if key-func (funcall key-func x) x)))
         (puthash key (+ (gethash key h 0) (funcall value-func x)) h)))
@@ -677,12 +679,11 @@ HABIT-DATA contains the results of `org-habit-parse-todo`."
 
 (defun org-habit-stats-refresh-calendar-buffer ()
   "Delete and re-insert calendar with updated info."
-  (with-current-buffer org-habit-stats-calendar-buffer
-    (setq buffer-read-only nil)
-    (erase-buffer)
-    (let* ((month org-habit-stats-displayed-month)
-           (year org-habit-stats-displayed-year)
-           (habit-data org-habit-stats-current-habit-data))
+  (let* ((month org-habit-stats-displayed-month)
+         (year org-habit-stats-displayed-year)
+         (habit-data org-habit-stats-current-habit-data))
+    (with-current-buffer org-habit-stats-calendar-buffer
+      (setq buffer-read-only nil)
       (calendar-generate-window month year)
       (org-habit-stats-calendar-mark-habits habit-data)
       (setq buffer-read-only t))))
@@ -1067,10 +1068,10 @@ display to MAX, and sort lists with SORT-PRED if desired."
   (let ((namediff (- org-habit-stats-graph-min-num-bars (length namelst)))
         (numdiff (- org-habit-stats-graph-min-num-bars (length numlst))))
     (if (> namediff 0)
-        (dotimes (x namediff)
+        (dotimes (_ namediff)
           (push "" namelst)))
     (if (> numdiff 0)
-        (dotimes (x numdiff)
+        (dotimes (_ numdiff)
           (push 0 numlst)))
     (let ((chart-face-list org-habit-stats-graph-face-list))
       (org-habit-stats-chart-bar-quickie-extended
@@ -1290,8 +1291,12 @@ buffer the habit was located in. This is used by commands that
 navigate between habits."
   (let* ((buff (current-buffer))
          (history (org-habit-stats-get-repeat-history-old-to-new habit-data))
-         (history-rev (reverse history)))
+         (history-rev (reverse history))
+         (buff-name (concat "*Org-Habit-Stats "
+                            (truncate-string-to-width habit-name 25 nil nil t) "*")))
+    (setq org-habit-stats-current-buffer buff-name)
     (switch-to-buffer (get-buffer-create org-habit-stats-buffer))
+    (erase-buffer)
     (org-habit-stats-mode)
     (setq org-habit-stats-habit-source habit-source)
     (setq org-habit-stats-current-history history)
@@ -1332,7 +1337,7 @@ navigate between habits."
 (defun org-habit-stats-parse-todo (&optional pom)
   "Get habit data by calling `org-habit-parse-todo` on POM.
 
-Temporarily sets org-habit-preceding-days to a big value to avoid
+Locally sets 'org-habit-preceding-days` to a big value to avoid
 habit data getting truncated."
   (let ((org-habit-preceding-days 40000))
     (org-habit-parse-todo pom)))
@@ -1447,9 +1452,8 @@ habit data getting truncated."
 (defun org-habit-stats-line-number-at-pos ()
   (string-to-number (format-mode-line "%l")))
 
-;;;###autoload
 (defun org-habit-stats-view-next-habit-in-agenda ()
-  "View next habit in the current org agenda buffer."
+  "View next habit in the current org agenda buffer (internal)."
   (interactive)
   (if (not (derived-mode-p 'org-agenda-mode))
       (user-error "Not in agenda buffer")
@@ -1467,9 +1471,8 @@ habit data getting truncated."
         (org-habit-stats-view-habit-at-point-agenda)
       (user-error "No habits found in agenda buffer")))))
 
-;;;###autoload
 (defun org-habit-stats-view-previous-habit-in-agenda ()
-  "View previous habit in the current org agenda buffer."
+  "View previous habit in the current org agenda buffer (internal)."
   (interactive)
   (if (not (derived-mode-p 'org-agenda-mode))
       (user-error "Not in agenda buffer")
