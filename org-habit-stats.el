@@ -1293,9 +1293,14 @@ navigate between habits."
          (history (org-habit-stats-get-repeat-history-old-to-new habit-data))
          (history-rev (reverse history))
          (buff-name (concat "*Org-Habit-Stats "
-                            (truncate-string-to-width habit-name 25 nil nil t) "*")))
+                            (truncate-string-to-width habit-name 25 nil nil t)
+                            "*"))
+         (cal-buff-name (concat "*Org-Habit-Stats Calendar "
+                            (truncate-string-to-width habit-name 25 nil nil t)
+                            "*")))
     (setq org-habit-stats-current-buffer buff-name)
-    (switch-to-buffer (get-buffer-create org-habit-stats-buffer))
+    (setq org-habit-stats-current-calendar-buffer cal-buff-name)
+    (switch-to-buffer (get-buffer-create org-habit-stats-current-buffer))
     (erase-buffer)
     (org-habit-stats-mode)
     (setq org-habit-stats-habit-source habit-source)
@@ -1355,9 +1360,8 @@ habit data getting truncated."
         (habit-description (org-entry-get (point) "DESCRIPTION")))
     (org-habit-stats-create-habit-buffer habit-data habit-name habit-description 'file)))
 
-;;;###autoload
 (defun org-habit-stats-view-next-habit-in-buffer ()
-  "View next habit in current file."
+  "View next habit in current file (internal)."
   (interactive)
   (let ((orig-pos (point))
         habit-pos)
@@ -1374,9 +1378,8 @@ habit data getting truncated."
         (org-habit-stats-view-habit-at-point)
       (user-error "No habits found in buffer"))))
 
-;;;###autoload
 (defun org-habit-stats-view-previous-habit-in-buffer ()
-  "View previous habit in current file."
+  "View previous habit in current file (internal)."
   (interactive)
   (let ((orig-pos (point))
         habit-pos)
@@ -1393,35 +1396,6 @@ habit data getting truncated."
         (org-habit-stats-view-habit-at-point)
       (user-error "No habits found in buffer"))))
 
-;;;###autoload
-(defun org-habit-stats-view-next-habit ()
-  "From org-habit-stats buffer, view next habit in file or agenda."
-  (interactive)
-  (if (not (derived-mode-p 'org-habit-stats-mode))
-      (user-error "Not in an org-habit-stats-mode buffer")
-    (if (eq org-habit-stats-habit-source 'agenda)
-        (progn
-          (org-habit-stats-exit)
-          (org-agenda-next-item 1)
-          (org-habit-stats-view-next-habit-in-agenda))
-      (org-habit-stats-exit)
-      (outline-next-heading)
-      (org-habit-stats-view-next-habit-in-buffer))))
-
-;;;###autoload
-(defun org-habit-stats-view-previous-habit ()
-  "From org-habit-stats buffer, view previous habit in file or agenda."
-  (interactive)
-  (if (not (derived-mode-p 'org-habit-stats-mode))
-      (user-error "Not in an org-habit-stats-mode buffer")
-    (if (eq org-habit-stats-habit-source 'agenda)
-        (progn
-          (org-habit-stats-exit)
-          (org-agenda-previous-item 1)
-          (org-habit-stats-view-previous-habit-in-agenda))
-      (org-habit-stats-exit)
-      (outline-previous-heading)
-      (org-habit-stats-view-previous-habit-in-buffer))))
 
 (defun org-habit-stats--agenda-item-is-habit-p ()
   "Check if current agenda item is a habit."
@@ -1491,6 +1465,37 @@ habit data getting truncated."
         (user-error "No habits found in agenda buffer")))))
 
 ;;;###autoload
+(defun org-habit-stats-view-next-habit ()
+  "From org-habit-stats buffer, view next habit in file or agenda."
+  (interactive)
+  (if (not (derived-mode-p 'org-habit-stats-mode))
+      (user-error "Not in an org-habit-stats-mode buffer")
+    (if (eq org-habit-stats-habit-source 'agenda)
+        (progn
+          (org-habit-stats-exit)
+          (org-agenda-next-item 1)
+          (org-habit-stats-view-next-habit-in-agenda))
+      (org-habit-stats-exit)
+      (outline-next-heading)
+      (org-habit-stats-view-next-habit-in-buffer))))
+
+;;;###autoload
+(defun org-habit-stats-view-previous-habit ()
+  "From org-habit-stats buffer, view previous habit in file or agenda."
+  (interactive)
+  (if (not (derived-mode-p 'org-habit-stats-mode))
+      (user-error "Not in an org-habit-stats-mode buffer")
+    (if (eq org-habit-stats-habit-source 'agenda)
+        (progn
+          (org-habit-stats-exit)
+          (org-agenda-previous-item 1)
+          (org-habit-stats-view-previous-habit-in-agenda))
+      (org-habit-stats-exit)
+      (outline-previous-heading)
+      (org-habit-stats-view-previous-habit-in-buffer))))
+
+
+;;;###autoload
 (defun org-habit-stats-exit ()
   "Kill org-habit-stats buffer and the internal calendar buffer."
   (interactive)
@@ -1498,7 +1503,7 @@ habit data getting truncated."
       (user-error "Not in an org-habit-stats-mode buffer")
   (when (bufferp org-habit-stats-calendar-buffer)
       (kill-buffer org-habit-stats-calendar-buffer))
-  (kill-buffer org-habit-stats-buffer)))
+  (kill-buffer org-habit-stats-current-buffer)))
 
 ;;; Major mode
 (defun org-habit-stats-format-graph-func-name (s)
