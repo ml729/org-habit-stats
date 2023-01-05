@@ -671,7 +671,8 @@ HABIT-DATA contains the results of `org-habit-parse-todo`."
            (month (1- (calendar-extract-month date)))
            (year (calendar-extract-year date))
            (completed-dates (nth 4 habit-data)))
-      (calendar-generate-window month year)
+      (let (calendar-today-visible-hook calendar-today-invisible-hook)
+        (calendar-generate-window month year))
       (setq org-habit-stats-displayed-month month)
       (setq org-habit-stats-displayed-year year)
       (org-habit-stats-calendar-mark-habits habit-data))
@@ -684,7 +685,8 @@ HABIT-DATA contains the results of `org-habit-parse-todo`."
          (habit-data org-habit-stats-current-habit-data))
     (with-current-buffer org-habit-stats-calendar-buffer
       (setq buffer-read-only nil)
-      (calendar-generate-window month year)
+      (let (calendar-today-visible-hook calendar-today-invisible-hook)
+        (calendar-generate-window month year))
       (org-habit-stats-calendar-mark-habits habit-data)
       (setq buffer-read-only t))))
 
