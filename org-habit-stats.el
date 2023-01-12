@@ -460,7 +460,7 @@ information.
 HISTORY-REV is the reverse of history.
 
 HABIT-DATA is the result of running
-org-habit-parse-todo on a habit."
+`org-habit-parse-todo' on a habit."
   (org-habit-stats--streak history-rev))
 
 (defun org-habit-stats--unstreak (h)
@@ -471,7 +471,7 @@ H must be new-to-old habit history."
       (1+ (org-habit-stats--unstreak h))
     0))
 (defun org-habit-stats-unstreak (history history-rev &optional habit-data)
-  "Returns the current unstreak (number of consecutive days missed).
+  "Return the current unstreak (number of consecutive days missed).
 If there is no history, returns 0.
 
 See the docstring of `org-habit-stats-streak' for a description
@@ -680,6 +680,13 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
 
 ;;; Message functions
 (defun org-habit-stats-get-messages (history history-rev habit-data)
+  "Return list of messages to display for the habit.
+It does so by calling all functions in
+`org-habit-stats-message-functions-list' on the three forms of
+the habit's data.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let ((messageslst '()))
     (dolist (x org-habit-stats-message-functions-list)
       (let ((x-message (funcall x history history-rev habit-data)))
@@ -688,6 +695,13 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
     (reverse messageslst)))
 
 (defun org-habit-stats-streak-message (history history-rev habit-data)
+  "Return a message based on the habit's streak or nil.
+When the current streak is equal to the first value in a pair in
+`org-habit-stats-streak-message-alist', the second value of that
+pair is returned as the message.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let* ((streak (org-habit-stats-streak history history-rev habit-data))
         (message (alist-get streak org-habit-stats-streak-message-alist)))
     (when message
@@ -695,6 +709,13 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
         'face 'org-habit-stats-message-positive))))
 
 (defun org-habit-stats-unstreak-message (history history-rev habit-data)
+  "Return a message based on the habit's streak or nil.
+When the current unstreak is equal to the first value in a pair in
+`org-habit-stats-unstreak-message-alist', the second value of that
+pair is returned as the message.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let* ((unstreak (org-habit-stats-unstreak history history-rev habit-data))
         (message (alist-get unstreak org-habit-stats-unstreak-message-alist)))
     (when message
@@ -702,6 +723,15 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
        'face 'org-habit-stats-message-encouraging))))
 
 (defun org-habit-stats-comeback-message (history history-rev habit-data)
+  "Return a message when a comeback happens.
+The message is `org-habit-stats-comeback-message'.
+
+A comeback occurs when the user reaches a record streak that they
+previously already obtained. It also only applies for streaks of
+length at least 5.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let* ((curr-streak (org-habit-stats-streak history history-rev habit-data))
          (record-data (org-habit-stats--record-streak-full history history-rev habit-data))
          (record-day (cdr record-data))
@@ -723,15 +753,19 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
             (calendar-mark-visible-date completed-day-gregorian 'org-habit-stats-calendar-completed))))))
 
 (defun org-habit-stats-get-calendar-contents ()
+  "Return contents of `org-habit-stats-calendar-buffer'."
   (with-current-buffer org-habit-stats-calendar-buffer
     (buffer-string)))
 
 (defun org-habit-stats-get-calendar-overlays ()
+  "Return a list of all overlays in `org-habit-stats-calendar-buffer'.
+These are overlays corresponding to completed days."
   (with-current-buffer org-habit-stats-calendar-buffer
     (let ((ol-list (overlay-lists)))
       (append (car ol-list) (cdr ol-list)))))
 
 (defun org-habit-stats-apply-overlays (ol-list offset buffer)
+  "Apply overlays in OL-LIST to BUFFER, by offset OFFSET."
   (dolist (ol ol-list)
     (let* ((new-start (+ (overlay-start ol) offset))
            (new-end (+ (overlay-end ol) offset))
@@ -820,25 +854,32 @@ N can be positive, zero, or negative."
   (org-habit-stats-refresh-calendar-section)))
 
 (defun org-habit-stats-calendar-scroll-right (arg)
+  "Move the `org-habit-stats' calendar forward ARG months."
   (interactive "p")
   (org-habit-stats--calendar-scroll arg))
 
 (defun org-habit-stats-calendar-scroll-left (arg)
+  "Move the `org-habit-stats' calendar backward ARG months."
   (interactive "p")
   (org-habit-stats--calendar-scroll (- arg)))
 
 (defun org-habit-stats-calendar-scroll-right-three-months (arg)
+  "Move the `org-habit-stats' calendar forward 3*ARG months."
   (interactive "p")
   (org-habit-stats--calendar-scroll (* 3 arg)))
 
 (defun org-habit-stats-calendar-scroll-left-three-months (arg)
+  "Move the `org-habit-stats' calendar backward 3*ARG months."
   (interactive "p")
   (org-habit-stats--calendar-scroll (* -3 arg)))
+
 (defun org-habit-stats-calendar-forward-year (arg)
+  "Move the `org-habit-stats' calendar forward 12*ARG months."
   (interactive "p")
   (org-habit-stats--calendar-scroll (* 12 arg)))
 
 (defun org-habit-stats-calendar-backward-year (arg)
+  "Move the `org-habit-stats' calendar backward 12*ARG months."
   (interactive "p")
   (org-habit-stats--calendar-scroll (* -12 arg)))
 
@@ -931,12 +972,16 @@ the second containing the corresponding counts per category."
          :initform nil)
    (name :initarg :name
          :initform "Data"))
-  "Class used for all data in different charts, originally defined
-in charts.el as 'chart-sequence'. In some earlier versions of
-Emacs the name of this class contains a typo (chart-sequece) so
-we redefine it here under a new name.")
+  "Class used for all data in different charts.
+Originally defined in charts.el as 'chart-sequence'. In some
+earlier versions of Emacs the name of this class contains a
+typo (chart-sequece) so we redefine it here under a new name.")
 
 (defun org-habit-stats-graph-create-faces ()
+  "Create faces for `org-habit-stats' graph.
+
+It creates them out of the colors in
+`org-habit-stats-graph-colors-list'."
   (let ((faces ())
         newface)
     (dolist (color org-habit-stats-graph-colors-list)
@@ -1086,6 +1131,11 @@ Begins at line LINE."
 
 
 (defun org-habit-stats--chart-trim-offset (seq max offset end)
+  "Trim SEQ to be at most MAX elements.
+If END is nil, trim OFFSET elements, keep the next MAX elements,
+and trim the remaining elements.
+
+Helper function for `org-habit-stats-chart-trim-offset.'"
   (if (> (+ offset max) (length seq))
       (setq org-habit-stats-graph-current-offset (- (length seq) max)))
   (let* ((newbeg (min offset (- (length seq) max)))
@@ -1114,17 +1164,21 @@ end of the sequence instead."
 (defun org-habit-stats-chart-bar-quickie-extended (dir title namelst nametitle numlst numtitle
                                                        &optional max sort-pred offset end width height
                                                        topmargin leftmargin titleface nameface labelface)
-  "Modification of function chart-bar-quickie to support custom
-graph dimensions, margins, and faces. Inserts graph into current
-buffer, with width WIDTH, height HEIGHT, vertical margin of
-TOPMARGIN from current line, horizontal margin of LEFTMARGIN,
-face TITLEFACE for title, face NAMEFACE for axis names, face
-LABELFACE for labels for values. Original Docstring: Wash over
-the complex EIEIO stuff and create a nice bar chart. Create it
-going in direction DIR [`horizontal' `vertical'] with TITLE using
-a name sequence NAMELST labeled NAMETITLE with values NUMLST
-labeled NUMTITLE. Optional arguments: Set the chart's max element
-display to MAX, and sort lists with SORT-PRED if desired."
+  "Modification of function chart-bar-quickie.
+Supports custom graph dimensions, margins, and faces. Inserts
+graph into current buffer, with width WIDTH, height HEIGHT,
+vertical margin of TOPMARGIN from current line, horizontal margin
+of LEFTMARGIN, face TITLEFACE for title, face NAMEFACE for axis
+names, face LABELFACE for labels for values. Original Docstring:
+Wash over the complex EIEIO stuff and create a nice bar chart.
+Create it going in direction DIR [`horizontal' `vertical'] with
+TITLE using a name sequence NAMELST labeled NAMETITLE with values
+NUMLST labeled NUMTITLE. Optional arguments: Set the chart's max
+element display to MAX, and sort lists with SORT-PRED if
+desired.
+
+See `org-habit-stats-chart-trim-offset' for the purpose of
+OFFSET and END."
   (let ((nc (make-instance 'chart-bar
                            :title title
                            :title-face titleface
@@ -1210,6 +1264,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
 
 ;;; Graph commands
 (defun org-habit-stats-switch-graph (graph-func)
+  "Switch the graph to the graph with data produced by GRAPH-FUNC."
   (if (not (derived-mode-p 'org-habit-stats-mode))
       (user-error "Not in an org-habit-stats-mode buffer")
     (setq org-habit-stats-graph-current-func graph-func)
@@ -1217,6 +1272,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (org-habit-stats-refresh-graph-section)))
 
 (defun org-habit-stats--scroll-graph (n)
+  "Scroll graph to the left by N bars."
   (if (not (derived-mode-p 'org-habit-stats-mode))
       (user-error "Not in an org-habit-stats-mode buffer")
     (setq org-habit-stats-graph-current-offset
@@ -1224,17 +1280,23 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (org-habit-stats-refresh-graph-section)))
 
 (defun org-habit-stats-scroll-graph-left ()
+  "Scroll graph to the left by 2 bars."
   (interactive)
   (org-habit-stats--scroll-graph 2))
+
 (defun org-habit-stats-scroll-graph-right ()
+  "Scroll graph to the right by 2 bars."
   (interactive)
   (if (> org-habit-stats-graph-current-offset 0)
       (org-habit-stats--scroll-graph -2)))
 
 (defun org-habit-stats-scroll-graph-left-big ()
+  "Scroll graph to the left by 7 bars."
   (interactive)
   (org-habit-stats--scroll-graph 7))
+
 (defun org-habit-stats-scroll-graph-right-big ()
+  "Scroll graph to the right by 7 bars."
   (interactive)
   (if (> org-habit-stats-graph-current-offset 0)
       (org-habit-stats--scroll-graph -7)))
@@ -1260,6 +1322,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
             "\n")))
 
 (defun org-habit-stats-format-one-stat (statname statdata)
+  "Format stiatistic with name STATNAME and value STATDATA."
   (let* ((fdata (cond ((integerp statdata) (format "%d" statdata))
                       ((floatp statdata) (format "%.2f" statdata))
                       (t statdata)))
@@ -1271,7 +1334,10 @@ display to MAX, and sort lists with SORT-PRED if desired."
                 (make-string numspaces 32)))))
 
 (defun org-habit-stats-insert-stats (history history-rev habit-data)
-  ;; insert habit stats
+  "Insert all statistics into the buffer.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let* ((i 0)
          (stats-start (point))
          (statresults (org-habit-stats-calculate-stats history history-rev habit-data)))
@@ -1285,7 +1351,10 @@ display to MAX, and sort lists with SORT-PRED if desired."
       (setq org-habit-stats-stat-bounds (cons stats-start (point)))))
 
 (defun org-habit-stats-insert-messages (history history-rev habit-data)
-  ;; insert habit stats
+   "Insert all messages into the buffer.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let* ((messages-start (point))
          (messageslst (org-habit-stats-get-messages history history-rev habit-data)))
     (when messageslst
@@ -1295,6 +1364,10 @@ display to MAX, and sort lists with SORT-PRED if desired."
       (setq org-habit-stats-message-bounds (cons messages-start (point))))))
 
 (defun org-habit-stats-insert-calendar (habit-data)
+  "Insert calendar displaying all completions into the buffer.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HABIT-DATA."
   (let ((cal-start (point))
         (cal-start-line (line-number-at-pos))
         (cal-offset-for-overlay (1- (point))))
@@ -1310,6 +1383,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
 
 ;;; Refresh sections
 (defun org-habit-stats-refresh-buffer ()
+  "Refresh `org-habit-stats' buffer."
   (interactive)
   (if (not (derived-mode-p 'org-habit-stats-mode))
       (user-error "Not in an org-habit-stats-mode buffer")
@@ -1318,6 +1392,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (set-buffer-modified-p nil)))
 
 (defun org-habit-stats-refresh-graph-section ()
+  "Refresh the graph in the `org-habit-stats' buffer."
   (let* ((graph-bounds org-habit-stats-graph-bounds)
          (graph-start (car graph-bounds))
          (graph-end (cdr graph-bounds))
@@ -1330,6 +1405,7 @@ display to MAX, and sort lists with SORT-PRED if desired."
     (set-buffer-modified-p nil)))
 
 (defun org-habit-stats-refresh-calendar-section ()
+  "Refresh the calendar in the `org-habit-stats' buffer."
   (let* ((cal-bounds org-habit-stats-calendar-bounds)
          (cal-start (car cal-bounds))
          (cal-end (cdr cal-bounds)))
@@ -1341,16 +1417,20 @@ display to MAX, and sort lists with SORT-PRED if desired."
 
 ;;; Create org-habit-stats buffer
 (defun org-habit-stats--insert-divider ()
+  "Insert a divider.
+The divider consists of 80 `org-agenda-block-separator'."
   (insert (make-string 80
            ;; (max 80 (window-width))
            org-agenda-block-separator))
   (insert (make-string 1 ?\n)))
 
 (defun org-habit-stats-insert-section-header (name)
+  "Insert a section header."
   (insert (propertize name 'face 'org-habit-stats-section-name)
           "\n"))
 
 (defun org-habit-stats--insert-habit-buffer-contents ()
+  "Insert all buffer contents for the `org-habit-stats' buffer."
   (let ((history org-habit-stats-current-history)
         (history-rev org-habit-stats-current-history-rev)
         (habit-data org-habit-stats-current-habit-data)
@@ -1406,6 +1486,7 @@ navigate between habits."
 
 ;;; Set stats as properties
 (defun org-habit-stats-number-to-string-maybe (x)
+  "Format X as a string whether it is an integer or float."
   (cond ((integerp x) (format "%d" x))
         ((floatp x) (format "%.5f" x))
         (t x)))
@@ -1516,6 +1597,7 @@ habit data getting truncated."
         (org-habit-stats-create-habit-buffer habit-data habit-name habit-description 'agenda)))))
 
 (defun org-habit-stats-line-number-at-pos ()
+  "Get line number at current point."
   (string-to-number (format-mode-line "%l")))
 
 (defun org-habit-stats-view-next-habit-in-agenda ()
