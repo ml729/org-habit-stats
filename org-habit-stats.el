@@ -254,10 +254,10 @@ the message when the unstreak length is exactly that value."
                                              :y-label "Strength"
                                              :dir vertical
                                              :max-bars 14)))
-  "Alist mapping graph functions to a list containing: the key
-that invokes the function, the title of the graph, the name of
-the x-axis, the name of the y-axis, the graph direction, and the
-max number of bars to show at a time."
+  "Alist mapping graph functions to a list of key value pairs.
+This includes the key that invokes the function, the title of the
+graph, the name of the x-axis, the name of the y-axis, the graph
+direction, and the max number of bars to show at a time."
   :group 'org-habit-stats
   :type '(alist :key-type function :value-type sexp))
 
@@ -267,8 +267,7 @@ max number of bars to show at a time."
   :type 'function)
 
 (defcustom org-habit-stats-show-blank-when-new-habit t
-  "Whether to display blank screen with new habit message for a habit with
-0 completions logged."
+  "If t, display new habit message for a habit with 0 completions."
   :group 'org-habit-stats
   :type 'boolean)
 
@@ -299,8 +298,8 @@ max number of bars to show at a time."
   "How many bars to shift left when the bar graph is truncated.")
 
 (defvar org-habit-stats-graph-face-list nil
-  "Faces used for bars in graphs, generated from
-`org-habit-stats-graph-colors-list'.")
+  "Faces used for bars in graphs.
+Generated from `org-habit-stats-graph-colors-list'.")
 
 (defvar org-habit-stats-graph-current-func nil
   "Current graph function used in org habit stats buffer.")
@@ -447,22 +446,46 @@ are removed."
       0))
 
 (defun org-habit-stats-streak (history history-rev &optional habit-data)
+  "Return current streak of the habit.
+
+HISTORY contains a list of pairs (date . completed) where date is
+represented as the number of days since December 31, 1 BC (as is
+used by many `org-mode' functions) and completed is 1 if the
+habit was completed that day, and 0 otherwise. It is in order
+from oldest to newest. Days are skipped if the repeat interval of
+the habit is greater than one. See
+`org-habit-stats-get-repeat-history-old-to-new' for more
+information.
+
+HISTORY-REV is the reverse of history.
+
+HABIT-DATA is the result of running
+org-habit-parse-todo on a habit."
   (org-habit-stats--streak history-rev))
 
 (defun org-habit-stats--unstreak (h)
+  "Helper function for `org-habit-stats-unstreak'.
+
+H must be new-to-old habit history."
   (if (and h (= (cdr (pop h)) 0))
       (1+ (org-habit-stats--unstreak h))
     0))
 (defun org-habit-stats-unstreak (history history-rev &optional habit-data)
-  "Returns the current unstreak (number of consecutive days missed). If there is no
-history, returns 0."
+  "Returns the current unstreak (number of consecutive days missed).
+If there is no history, returns 0.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats--unstreak history-rev))
 
 (defun org-habit-stats--record-streak-full (history history-rev &optional habit-data)
-  "Returns (record-streak . record-day).
+  "Return (record-streak . record-day).
 
 The record-day is the last day of the record streak. If the
-record streak occurs on multiple days, return the earliest one."
+record streak occurs on multiple days, return the earliest one.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let ((record-streak 0)
         (record-day (org-today))
         (curr-streak 0)
@@ -483,12 +506,17 @@ record streak occurs on multiple days, return the earliest one."
     (cons record-streak record-day)))
 
 (defun org-habit-stats--single-whitespace-only (s)
+  "Replace all contiguous whitespace with a single space in S."
   (string-join
    (seq-filter (lambda (x) (if (> (length x) 0) t))
                (split-string s " "))
    " "))
 
 (defun org-habit-stats-record-streak-format (history history-rev habit-data)
+  "Return human readable results from `org-habit-stats--record-streak-full'.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let* ((record-data (org-habit-stats--record-streak-full history-rev habit-data))
          (record-streak (car record-data))
          (record-day (cdr record-data)))
@@ -497,14 +525,29 @@ record streak occurs on multiple days, return the earliest one."
             (org-habit-stats--single-whitespace-only (org-agenda-format-date-aligned record-day)))))
 
 (defun org-habit-stats-record-streak-days (history history-rev habit-data)
+  "Return the record streak length.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (car (org-habit-stats--record-streak-full history history-rev habit-data)))
 
 (defun org-habit-stats-record-streak-date (history history-rev habit-data)
+  "Return the day the record streak is achieved.
+
+If there are multiple record streaks, this returns the last day
+of the latest one.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats-format-absolute-day-string
    org-habit-stats-stat-date-format
    (cdr (org-habit-stats--record-streak-full history history-rev habit-data))))
 
 (defun org-habit-stats--N-day-total (history history-rev N)
+  "Return the number of completions in the last N days.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY and HISTORY-REV."
   (if (and (> N 0) history-rev)
       (if (= (cdr (pop history-rev)) 1)
           (1+ (org-habit-stats--N-day-total history history-rev (1- N)))
@@ -512,18 +555,36 @@ record streak occurs on multiple days, return the earliest one."
     0))
 
 (defun org-habit-stats-percentage-format (x)
+  "Format real number X as a percent."
   (format "%.2f%%" (* 100 x)))
+
 (defun org-habit-stats--N-day-percentage (history history-rev habit-data N)
+  "Return the percentage of completions in the last N days.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats-percentage-format
    (/ (org-habit-stats--N-day-total history history-rev N) (float N))))
 
 (defun org-habit-stats-30-day-percentage (history history-rev habit-data)
+  "Return the percentage of completions in the last 30 days.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats--N-day-percentage history history-rev habit-data 30))
 
 (defun org-habit-stats-365-day-percentage (history history-rev habit-data)
+  "Return the percentage of completions in the last 365 days.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats--N-day-percentage history history-rev habit-data 365))
 
 (defun org-habit-stats-alltime-percentage (history history-rev habit-data)
+  "Return the percentage of completions since the first completion.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let* ((repeat-len (nth 1 habit-data))
         (numerator (org-habit-stats-alltime-total history history-rev habit-data))
         (denominator (float (length history))))
@@ -532,18 +593,35 @@ record streak occurs on multiple days, return the earliest one."
       (/ numerator denominator)))))
 
 (defun org-habit-stats-30-day-total (history history-rev habit-data)
+  "Return the total number of completions in the last 30 days.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats--N-day-total history history-rev 30))
 
 (defun org-habit-stats-365-day-total (history history-rev habit-data)
+  "Return the total number of completions in the last 365 days.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats--N-day-total history history-rev 365))
 
 (defun org-habit-stats-alltime-total (history history-rev habit-data)
+  "Return the total number of completions since the first completion.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (length (nth 4 habit-data)))
 
 (defun org-habit-stats--exp-smoothing-list-full (history history-rev habit-data)
-  "Return score for a binary list HISTORY, computed via
-exponential smoothing. (Inspired by the GPLv3 Loop Habit Tracker
-app's score.)"
+  "Return list of scores for a habit.
+The list contains the scores for every day between today and the
+first completion inclusive. The score is computed via exponential
+smoothing. (Inspired by the GPLv3 Loop Habit Tracker app's
+score.).
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (if (not history) nil
     (let* ((scores '())
            (alpha org-habit-stats-exp-smoothing-alpha)
@@ -558,14 +636,20 @@ app's score.)"
       (mapcar (lambda (x) (* 100 x)) scores))))
 
 (defun org-habit-stats-exp-smoothing-list-today (history history-rev habit-data)
+  "Return today's score for the habit.
+See `org-habit-stats--exp-smoothing-list-full' for more details.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (if (not history) 0
     (car (org-habit-stats--exp-smoothing-list-full
           history history-rev habit-data))))
 
 (defun org-habit-stats-get-freq (seq &optional key-func value-func)
-  "Return frequencies of elements in SEQ. If KEY-FUNC, use
-KEY-FUNC to produce keys for hash table. Credit to
-https://stackoverflow.com/a/6050245"
+  "Return frequencies of elements in SEQ.
+If KEY-FUNC, use KEY-FUNC to produce keys for hash table. If
+VALUE-FUNC, use VALUE-FUNC to produce values for hash table.
+Credit to https://stackoverflow.com/a/6050245"
   (let ((h (make-hash-table :test 'equal))
         (freqs nil)
         (value-func (if value-func value-func (lambda (_) 1))))
@@ -576,6 +660,11 @@ https://stackoverflow.com/a/6050245"
     freqs))
 
 (defun org-habit-stats-calculate-stats (history history-rev habit-data)
+  "Return a list of cons pairs describing the stats for a habit.
+Each pair is of the form (\"name of stat\" . stat).
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let ((statresults '()))
     (dolist (x org-habit-stats-stat-functions-alist)
       (let* ((statfunc (car x))
@@ -586,6 +675,7 @@ https://stackoverflow.com/a/6050245"
     (reverse statresults)))
 
 (defun org-habit-stats-transpose-pair-list (a)
+  "Convert a list of pairs A to a pair of two lists."
   (cons (mapcar 'car a) (mapcar 'cdr a)))
 
 ;;; Message functions
