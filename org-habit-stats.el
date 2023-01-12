@@ -745,6 +745,10 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
 
 ;;; Calendar functions
 (defun org-habit-stats-calendar-mark-habits (habit-data)
+  "Mark completed habits in the internal calendar buffer.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HABIT-DATA."
   (let ((completed-dates (nth 4 habit-data))
         (calendar-buffer org-habit-stats-calendar-buffer))
     (dolist (completed-day completed-dates nil)
@@ -922,7 +926,10 @@ the second containing the corresponding counts per category."
                  (lambda (x y) (funcall predicate-func (car x) (car y)))))))
 
 (defun org-habit-stats-graph-completions-per-month (history history-rev habit-data)
-  "Return a pair of lists (months . counts)."
+  "Return a pair of lists (months . counts).
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats-graph-count-per-category
    history
    (lambda (d) (let ((day (calendar-gregorian-from-absolute d)))
@@ -933,7 +940,10 @@ the second containing the corresponding counts per category."
    (lambda (m) (car (rassoc (nth 0 m) org-habit-stats-months-names-alist)))))
 
 (defun org-habit-stats-graph-completions-per-week (history history-rev habit-data)
-  "Returns a pair of lists (weeks . counts)."
+  "Return a pair of lists (weeks . counts).
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats-graph-count-per-category
    history
    (lambda (d) (- d (mod d 7))) ;; converts absolute date to the sunday before or on; (month day year) format
@@ -943,12 +953,18 @@ the second containing the corresponding counts per category."
                                      time)))))
 
 (defun org-habit-stats--pad-history (history n)
+  "Pad the habit's HISTORY to length N.
+Appends uncompleted days to before the first completion."
   (while (< (length history) n)
     (let ((prev-day (1- (if history (caar history) (org-today)))))
       (push (cons prev-day 0) history)))
   history)
+
 (defun org-habit-stats-graph-completions-per-weekday (history history-rev habit-data)
-  "Returns a pair of lists (weeks . counts)."
+  "Return a pair of lists (weeks . counts).
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats-graph-count-per-category
    (org-habit-stats--pad-history history 7)
    (lambda (d) (mod d 7))
@@ -956,7 +972,10 @@ the second containing the corresponding counts per category."
    (lambda (d) (car (rassoc (1+ d) org-habit-stats-days-names-alist)))))
 
 (defun org-habit-stats-graph-daily-strength (history history-rev habit-data)
-  "Returns a pair of lists (days . habit strengths)."
+  "Return a pair of lists (days . habit strengths).
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let* ((dayslst (mapcar (lambda (d) (org-habit-stats-format-absolute-time-string
                                    org-habit-stats-graph-date-format
                                    (org-habit-stats-days-to-time (car d))))
@@ -1002,11 +1021,17 @@ lines."
    dir zone start end))
 
 (defun org-habit-stats-chart-draw-line-data (dir zone start end)
+  "Modification of `chart-draw-line' to use custom characters for bars.
+
+See `chart-draw-line' for meaning of DIR, ZONE, START, and END."
   (org-habit-stats-chart-draw-line-custom-char dir zone start end
                                    org-habit-stats-graph-data-horizontal-char
                                    org-habit-stats-graph-data-vertical-char))
 
 (defun org-habit-stats-chart-draw-line-axis (dir zone start end)
+  "Modification of `chart-draw-line' to use custom characters for axes.
+
+See `chart-draw-line' for meaning of DIR, ZONE, START, and END."
   (org-habit-stats-chart-draw-line-custom-char dir zone start end
                                    org-habit-stats-graph-axis-horizontal-char
                                    org-habit-stats-graph-axis-vertical-char))
@@ -1022,6 +1047,9 @@ lines."
 (advice-add 'chart-translate-xpos :override 'org-habit-stats-chart-translate-xpos)
 
 (defun org-habit-stats-chart-draw-axis (c)
+  "Advise `chart-draw-axis' to use custom characters.
+
+C is the chart the axis is drawn in."
   (unwind-protect
       (progn
       (advice-add 'chart-draw-line :override
@@ -1164,7 +1192,7 @@ end of the sequence instead."
 (defun org-habit-stats-chart-bar-quickie-extended (dir title namelst nametitle numlst numtitle
                                                        &optional max sort-pred offset end width height
                                                        topmargin leftmargin titleface nameface labelface)
-  "Modification of function chart-bar-quickie.
+  "Modification of function `chart-bar-quickie'.
 Supports custom graph dimensions, margins, and faces. Inserts
 graph into current buffer, with width WIDTH, height HEIGHT,
 vertical margin of TOPMARGIN from current line, horizontal margin
@@ -1211,6 +1239,13 @@ OFFSET and END."
 
 ;;; Draw graph
 (defun org-habit-stats--draw-graph (dir title namelst nametitle numlst numtitle max-bars)
+  "Draw the `org-habit-stats' graph.
+DIR specifies the direction of the bars (horizontal or vertical).
+TITLE is the title of the graph. NAMELST contains the list of
+labels of the bars. NAMETITLE is the name of the axis of labels.
+NUMLST contains the list of quantitative values for the bars.
+NUMTITLE is the name of the quantitative axis. MAX-BARS is the
+maximum number of bars displayed in the bar graph."
   (let ((namediff (- org-habit-stats-graph-min-num-bars (length namelst)))
         (numdiff (- org-habit-stats-graph-min-num-bars (length numlst))))
     (if (> namediff 0)
@@ -1240,6 +1275,11 @@ OFFSET and END."
        'org-habit-stats-graph-label))))
 
 (defun org-habit-stats-draw-graph (history history-rev habit-data)
+  "Draw the `org-habit-stats' bar graph.
+See helper function `org-habit-stats--draw-graph'.
+
+See the docstring of `org-habit-stats-streak' for a description
+of HISTORY, HISTORY-REV, HABIT-DATA."
   (let* ((graph-start (point))
          (func org-habit-stats-graph-current-func)
          (func-info (cdr (assoc func org-habit-stats-graph-functions-alist)))
@@ -1305,7 +1345,13 @@ OFFSET and END."
 (defun org-habit-stats-days-to-time (days)
   "Convert number of days DAYS to number of seconds."
   (* days 86400))
+
 (defun org-habit-stats-insert-habit-info (habit-data habit-name habit-description)
+  "Insert information about the habit.
+
+This includes the habit's name HABIT-NAME, description
+HABIT-DESCRIPTION, repeat data, and the next day it is scheduled.
+HABIT-DATA is the result of calling `org-habit-parse-todo'."
   (let ((habit-repeat-period (nth 1 habit-data))
         (habit-repeat-string (nth 5 habit-data))
         (habit-next-scheduled (nth 0 habit-data)))
@@ -1425,7 +1471,7 @@ The divider consists of 80 `org-agenda-block-separator'."
   (insert (make-string 1 ?\n)))
 
 (defun org-habit-stats-insert-section-header (name)
-  "Insert a section header."
+  "Insert a section header with text NAME."
   (insert (propertize name 'face 'org-habit-stats-section-name)
           "\n"))
 
