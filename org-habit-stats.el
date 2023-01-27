@@ -585,8 +585,7 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
 
 See the docstring of `org-habit-stats-streak' for a description
 of HISTORY, HISTORY-REV, HABIT-DATA."
-  (let* ((repeat-len (nth 1 habit-data))
-        (numerator (org-habit-stats-alltime-total history history-rev habit-data))
+  (let* ((numerator (org-habit-stats-alltime-total history history-rev habit-data))
         (denominator (float (length history))))
     (org-habit-stats-percentage-format (if (= denominator 0)
         0
@@ -656,7 +655,7 @@ Credit to https://stackoverflow.com/a/6050245"
     (dolist (x seq)
       (let ((key (if key-func (funcall key-func x) x)))
         (puthash key (+ (gethash key h 0) (funcall value-func x)) h)))
-    (maphash #'(lambda (k v) (push (cons k v) freqs)) h)
+    (maphash (lambda (k v) (push (cons k v) freqs)) h)
     freqs))
 
 (defun org-habit-stats-calculate-stats (history history-rev habit-data)
@@ -676,7 +675,7 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
 
 (defun org-habit-stats-transpose-pair-list (a)
   "Convert a list of pairs A to a pair of two lists."
-  (cons (mapcar 'car a) (mapcar 'cdr a)))
+  (cons (mapcar #'car a) (mapcar #'cdr a)))
 
 ;;; Message functions
 (defun org-habit-stats-get-messages (history history-rev habit-data)
@@ -798,7 +797,6 @@ HABIT-DATA contains the results of `org-habit-parse-todo`."
     (let* ((date (calendar-current-date))
            (month (1- (calendar-extract-month date)))
            (year (calendar-extract-year date))
-           (completed-dates (nth 4 habit-data)))
       (let (calendar-today-visible-hook calendar-today-invisible-hook)
         (calendar-generate-window month year))
       (setq org-habit-stats-displayed-month month)
@@ -1044,7 +1042,7 @@ See `chart-draw-line' for meaning of DIR, ZONE, START, and END."
                  (/ (float (oref c x-width))
                     (float (- (cdr range) (car range)))))))))
 
-(advice-add 'chart-translate-xpos :override 'org-habit-stats-chart-translate-xpos)
+(advice-add 'chart-translate-xpos :override #'org-habit-stats-chart-translate-xpos)
 
 (defun org-habit-stats-chart-draw-axis (c)
   "Advise `chart-draw-axis' to use custom characters.
@@ -1053,10 +1051,10 @@ C is the chart the axis is drawn in."
   (unwind-protect
       (progn
       (advice-add 'chart-draw-line :override
-                  'org-habit-stats-chart-draw-line-axis
+                  #'org-habit-stats-chart-draw-line-axis
                   '((name . org-habit-stats-draw-line-override)))
     (chart-draw-axis c))
-    (advice-remove 'chart-draw-line 'org-habit-stats-draw-line-override)))
+    (advice-remove 'chart-draw-line #'org-habit-stats-draw-line-override)))
 
 (defun org-habit-stats-chart-draw-title (c &optional align-left)
   "Draw a title of chart C. By default, it is centered.
@@ -1507,8 +1505,7 @@ HABIT-DESCRIPTION are displayed at the top of the buffer. The
 HABIT-SOURCE is either 'agenda or 'file, indicating what kind of
 buffer the habit was located in. This is used by commands that
 navigate between habits."
-  (let* ((buff (current-buffer))
-         (history (org-habit-stats-get-repeat-history-old-to-new habit-data))
+  (let* ((history (org-habit-stats-get-repeat-history-old-to-new habit-data))
          (history-rev (reverse history))
          (buff-name (concat "*Org-Habit-Stats "
                             (truncate-string-to-width habit-name 25 nil nil t)
@@ -1554,8 +1551,8 @@ navigate between habits."
         (org-set-property (org-habit-stats-format-property-name (car x))
                           (org-habit-stats-number-to-string-maybe (cdr x)))))))
 
-(add-hook 'org-after-todo-state-change-hook 'org-habit-stats-update-properties)
-(advice-add 'org-store-log-note :after 'org-habit-stats-update-properties)
+(add-hook 'org-after-todo-state-change-hook #'org-habit-stats-update-properties)
+(advice-add 'org-store-log-note :after #'org-habit-stats-update-properties)
 
 ;;; org-habit-stats commands
 (defun org-habit-stats-parse-todo (&optional pom)
