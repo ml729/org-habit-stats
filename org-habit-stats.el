@@ -445,7 +445,7 @@ are removed."
         (1+ (org-habit-stats--streak h))
       0))
 
-(defun org-habit-stats-streak (history history-rev &optional habit-data)
+(defun org-habit-stats-streak (_history history-rev _habit-data)
   "Return current streak of the habit.
 
 HISTORY contains a list of pairs (date . completed) where date is
@@ -470,7 +470,7 @@ H must be new-to-old habit history."
   (if (and h (= (cdr (pop h)) 0))
       (1+ (org-habit-stats--unstreak h))
     0))
-(defun org-habit-stats-unstreak (history history-rev &optional habit-data)
+(defun org-habit-stats-unstreak (_history history-rev _habit-data)
   "Return the current unstreak (number of consecutive days missed).
 If there is no history, returns 0.
 
@@ -478,7 +478,7 @@ See the docstring of `org-habit-stats-streak' for a description
 of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats--unstreak history-rev))
 
-(defun org-habit-stats--record-streak-full (history history-rev &optional habit-data)
+(defun org-habit-stats--record-streak-full (history _history-rev _habit-data)
   "Return (record-streak . record-day).
 
 The record-day is the last day of the record streak. If the
@@ -517,7 +517,7 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
 
 See the docstring of `org-habit-stats-streak' for a description
 of HISTORY, HISTORY-REV, HABIT-DATA."
-  (let* ((record-data (org-habit-stats--record-streak-full history-rev habit-data))
+  (let* ((record-data (org-habit-stats--record-streak-full history history-rev habit-data))
          (record-streak (car record-data))
          (record-day (cdr record-data)))
     (concat (number-to-string record-streak)
@@ -558,7 +558,7 @@ of HISTORY and HISTORY-REV."
   "Format real number X as a percent."
   (format "%.2f%%" (* 100 x)))
 
-(defun org-habit-stats--N-day-percentage (history history-rev habit-data N)
+(defun org-habit-stats--N-day-percentage (history history-rev _habit-data N)
   "Return the percentage of completions in the last N days.
 
 See the docstring of `org-habit-stats-streak' for a description
@@ -591,28 +591,28 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
         0
       (/ numerator denominator)))))
 
-(defun org-habit-stats-30-day-total (history history-rev habit-data)
+(defun org-habit-stats-30-day-total (history history-rev _habit-data)
   "Return the total number of completions in the last 30 days.
 
 See the docstring of `org-habit-stats-streak' for a description
 of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats--N-day-total history history-rev 30))
 
-(defun org-habit-stats-365-day-total (history history-rev habit-data)
+(defun org-habit-stats-365-day-total (history history-rev _habit-data)
   "Return the total number of completions in the last 365 days.
 
 See the docstring of `org-habit-stats-streak' for a description
 of HISTORY, HISTORY-REV, HABIT-DATA."
   (org-habit-stats--N-day-total history history-rev 365))
 
-(defun org-habit-stats-alltime-total (history history-rev habit-data)
+(defun org-habit-stats-alltime-total (_history _history-rev habit-data)
   "Return the total number of completions since the first completion.
 
 See the docstring of `org-habit-stats-streak' for a description
 of HISTORY, HISTORY-REV, HABIT-DATA."
   (length (nth 4 habit-data)))
 
-(defun org-habit-stats--exp-smoothing-list-full (history history-rev habit-data)
+(defun org-habit-stats--exp-smoothing-list-full (history _history-rev _habit-data)
   "Return list of scores for a habit.
 The list contains the scores for every day between today and the
 first completion inclusive. The score is computed via exponential
@@ -789,8 +789,6 @@ These are overlays corresponding to completed days."
 (defun org-habit-stats-make-calendar-buffer (habit-data)
   "Create a `calendar-mode' buffer displaying completed days.
 HABIT-DATA contains the results of `org-habit-parse-todo`."
-  ;; (interactive "P")
-  ;; (with-current-buffer
   (with-current-buffer
       (get-buffer-create org-habit-stats-calendar-buffer)
     (calendar-mode)
@@ -923,7 +921,7 @@ the second containing the corresponding counts per category."
                   (lambda (x) (cdr x)))
                  (lambda (x y) (funcall predicate-func (car x) (car y)))))))
 
-(defun org-habit-stats-graph-completions-per-month (history history-rev habit-data)
+(defun org-habit-stats-graph-completions-per-month (history _history-rev _habit-data)
   "Return a pair of lists (months . counts).
 
 See the docstring of `org-habit-stats-streak' for a description
@@ -937,7 +935,7 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
                          (t nil)))
    (lambda (m) (car (rassoc (nth 0 m) org-habit-stats-months-names-alist)))))
 
-(defun org-habit-stats-graph-completions-per-week (history history-rev habit-data)
+(defun org-habit-stats-graph-completions-per-week (history _history-rev _habit-data)
   "Return a pair of lists (weeks . counts).
 
 See the docstring of `org-habit-stats-streak' for a description
@@ -958,7 +956,7 @@ Appends uncompleted days to before the first completion."
       (push (cons prev-day 0) history)))
   history)
 
-(defun org-habit-stats-graph-completions-per-weekday (history history-rev habit-data)
+(defun org-habit-stats-graph-completions-per-weekday (history _history-rev _habit-data)
   "Return a pair of lists (weeks . counts).
 
 See the docstring of `org-habit-stats-streak' for a description
@@ -1054,7 +1052,7 @@ C is the chart the axis is drawn in."
                   #'org-habit-stats-chart-draw-line-axis
                   '((name . org-habit-stats-draw-line-override)))
     (chart-draw-axis c))
-    (advice-remove 'chart-draw-line #'org-habit-stats-draw-line-override)))
+    (advice-remove 'chart-draw-line 'org-habit-stats-draw-line-override)))
 
 (defun org-habit-stats-chart-draw-title (c &optional align-left)
   "Draw a title of chart C. By default, it is centered.
@@ -1407,7 +1405,7 @@ of HISTORY, HISTORY-REV, HABIT-DATA."
       (org-habit-stats--insert-divider)
       (setq org-habit-stats-message-bounds (cons messages-start (point))))))
 
-(defun org-habit-stats-insert-calendar (habit-data)
+(defun org-habit-stats-insert-calendar ()
   "Insert calendar displaying all completions into the buffer.
 
 See the docstring of `org-habit-stats-streak' for a description
@@ -1456,7 +1454,7 @@ of HABIT-DATA."
     (save-excursion
       (goto-char cal-start)
       (delete-region cal-start cal-end)
-      (org-habit-stats-insert-calendar org-habit-stats-current-habit-data))
+      (org-habit-stats-insert-calendar))
     (set-buffer-modified-p nil)))
 
 ;;; Create org-habit-stats buffer
@@ -1491,7 +1489,7 @@ The divider consists of 80 `org-agenda-block-separator'."
       (org-habit-stats--insert-divider)
       (org-habit-stats-insert-section-header "History")
       (org-habit-stats-make-calendar-buffer habit-data)
-      (org-habit-stats-insert-calendar habit-data)
+      (org-habit-stats-insert-calendar)
       (org-habit-stats--insert-divider)
       (org-habit-stats-insert-section-header "Graph")
       (org-habit-stats-draw-graph history history-rev habit-data))))
