@@ -1549,9 +1549,6 @@ navigate between habits."
         (org-set-property (org-habit-stats-format-property-name (car x))
                           (org-habit-stats-number-to-string-maybe (cdr x)))))))
 
-(add-hook 'org-after-todo-state-change-hook #'org-habit-stats-update-properties)
-(advice-add 'org-store-log-note :after #'org-habit-stats-update-properties)
-
 ;;; org-habit-stats commands
 (defun org-habit-stats-parse-todo (&optional pom)
   "Get habit data by calling `org-habit-parse-todo` on POM.
