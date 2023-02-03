@@ -1421,6 +1421,13 @@ of HABIT-DATA."
       (when (< calendar-height 8)
         (insert (make-string (- 7 calendar-height) ?\n)))
     (insert (make-string 1 ?\n))
+
+    (when org-habit-stats-graph-bounds
+      (let ((cal-bound-diff (- (point) (cdr org-habit-stats-calendar-bounds)))
+            (graph-start (car org-habit-stats-graph-bounds))
+            (graph-end (cdr org-habit-stats-graph-bounds)))
+        (setq org-habit-stats-graph-bounds (cons (+ graph-start cal-bound-diff)
+                                                 (+ graph-end cal-bound-diff)))))
     (setq org-habit-stats-calendar-bounds (cons cal-start (point))))))
 
 ;;; Refresh sections
