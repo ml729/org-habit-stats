@@ -1040,20 +1040,6 @@ See `chart-draw-line' for meaning of DIR, ZONE, START, and END."
                  (/ (float (oref c x-width))
                     (float (- (cdr range) (car range)))))))))
 
-;; (advice-add 'chart-translate-xpos :override #'org-habit-stats-chart-translate-xpos)
-
-;; (defun org-habit-stats-chart-draw-axis (c)
-;;   "Advise `chart-draw-axis' to use custom characters.
-
-;; C is the chart the axis is drawn in."
-;;   (unwind-protect
-;;       (progn
-;;       (advice-add 'chart-draw-line :override
-;;                   #'org-habit-stats-chart-draw-line-axis
-;;                   '((name . org-habit-stats-draw-line-override)))
-;;     (chart-draw-axis c))
-;;     (advice-remove 'chart-draw-line 'org-habit-stats-draw-line-override)))
-
 (cl-defmethod org-habit-stats-chart-draw-axis ((c chart))
   "Draw axis into the current buffer defined by chart C."
   (let ((ymarg (oref c y-margin))
@@ -1094,7 +1080,11 @@ If ALIGN-LEFT non-nil, it is aligned left."
   "Draw some axis for A in direction DIR with MARGIN in boundary.
 ZONE is a zone specification.
 START and END represent the boundary."
-  (chart-axis-draw a dir margin zone start end))
+  (org-habit-stats-chart-draw-line-axis dir (+ margin (if zone zone 0)) start end)
+  (chart-display-label (oref a name) dir (if zone (+ zone margin 3)
+                                           (if (eq dir 'horizontal)
+                                               1 0))
+                       start end (oref a name-face)))
 
 (cl-defmethod org-habit-stats-chart-axis-draw ((a chart-axis-range) &optional dir margin zone _start _end)
   "Draw axis information based upon a range to be spread along the edge.
