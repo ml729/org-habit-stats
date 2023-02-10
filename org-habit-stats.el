@@ -1040,19 +1040,26 @@ See `chart-draw-line' for meaning of DIR, ZONE, START, and END."
                  (/ (float (oref c x-width))
                     (float (- (cdr range) (car range)))))))))
 
-(advice-add 'chart-translate-xpos :override #'org-habit-stats-chart-translate-xpos)
-
-(defun org-habit-stats-chart-draw-axis (c)
-  "Advise `chart-draw-axis' to use custom characters.
-
-C is the chart the axis is drawn in."
-  (unwind-protect
-      (progn
-      (advice-add 'chart-draw-line :override
-                  #'org-habit-stats-chart-draw-line-axis
-                  '((name . org-habit-stats-draw-line-override)))
-    (chart-draw-axis c))
-    (advice-remove 'chart-draw-line 'org-habit-stats-draw-line-override)))
+(cl-defmethod org-habit-stats-chart-draw-axis ((c chart))
+  "Draw axis into the current buffer defined by chart C."
+  (let ((ymarg (oref c y-margin))
+        (xmarg (oref c x-margin))
+        (ylen (oref c y-width))
+        (xlen (oref c x-width)))
+    (if (same-class-p (oref c y-axis) 'chart-axis-range)
+        (org-habit-stats-chart-axis-draw (oref c y-axis) 'vertical ymarg
+                                         (if (oref (oref c y-axis) loweredge) nil xlen)
+                                         xmarg (+ xmarg ylen))
+      (chart-axis-draw (oref c y-axis) 'vertical ymarg
+                       (if (oref (oref c y-axis) loweredge) nil xlen)
+                       xmarg (+ xmarg ylen)))
+    (if (same-class-p (oref c x-axis) 'chart-axis-range)
+        (org-habit-stats-chart-axis-draw (oref c x-axis) 'horizontal xmarg
+                                         (if (oref (oref c x-axis) loweredge) nil ylen)
+                                         ymarg (+ ymarg xlen))
+      (chart-axis-draw (oref c x-axis) 'horizontal xmarg
+                       (if (oref (oref c x-axis) loweredge) nil ylen)
+                       ymarg (+ ymarg xlen)))))
 
 (defun org-habit-stats-chart-draw-title (c &optional align-left)
   "Draw a title of chart C. By default, it is centered.
@@ -1068,6 +1075,53 @@ If ALIGN-LEFT non-nil, it is aligned left."
                          (oref c y-margin) (+ (oref c x-width)
                                               (oref c y-margin))
                          (oref c title-face))))
+
+(cl-defmethod org-habit-stats-chart-axis-draw ((a chart-axis) &optional dir margin zone start end)
+  "Draw some axis for A in direction DIR with MARGIN in boundary.
+ZONE is a zone specification.
+START and END represent the boundary."
+  (org-habit-stats-chart-draw-line-axis dir (+ margin (if zone zone 0)) start end)
+  (chart-display-label (oref a name) dir (if zone (+ zone margin 3)
+                                           (if (eq dir 'horizontal)
+                                               1 0))
+                       start end (oref a name-face)))
+
+(cl-defmethod org-habit-stats-chart-axis-draw ((a chart-axis-range) &optional dir margin zone _start _end)
+  "Draw axis information based upon a range to be spread along the edge.
+A is the chart to draw.  DIR is the direction.
+MARGIN, ZONE, START, and END specify restrictions in chart space.
+Corrected to use `org-habit-stats-chart-translate-xpos'."
+  (cl-call-next-method)
+  ;; We prefer about 5 spaces between each value
+  (let* ((i (car (oref a bounds)))
+         (e (cdr (oref a bounds)))
+         (z (if zone zone 0))
+         (s nil)
+         (rng (- e i))
+         ;; want to jump by units of 5 spaces or so
+         (j (/ rng (/  (chart-size-in-dir (oref a chart) dir) 4)))
+         p1)
+    (if (= j 0) (setq j 1))
+    (while (<= i e)
+      (setq s
+            (cond ((> i 999999)
+                   (format "%dM" (/ i 1000000)))
+                  ((> i 999)
+                   (format "%dK" (/ i 1000)))
+                  (t
+                   (format "%d" i))))
+      (if (eq dir 'vertical)
+          (let ((x (+ (+ margin z) (if (oref a loweredge)
+                                       (- (length s)) 1))))
+            (if (< x 1) (setq x 1))
+            (chart-goto-xy x (chart-translate-ypos (oref a chart) i)))
+        (chart-goto-xy (org-habit-stats-chart-translate-xpos (oref a chart) i)
+                       (+ margin z (if (oref a loweredge) -1 1))))
+      (setq p1 (point))
+      (insert s)
+      (chart-zap-chars (length s))
+      (put-text-property p1 (point) 'face (oref a labels-face))
+      (setq i (+ i j)))))
 
 (cl-defmethod org-habit-stats-chart-draw-data ((c chart-bar))
   "Display the data available in a bar chart C, maybe label with exact values.
@@ -1098,10 +1152,10 @@ a bar next to it.''''"
               (let* ((rng (chart-translate-namezone c i))
                      (dp (if (eq dir 'vertical)
                              (chart-translate-ypos c (car seq))
-                           (chart-translate-xpos c (car seq))))
+                           (org-habit-stats-chart-translate-xpos c (car seq))))
                      (zp (if (eq dir 'vertical)
                              (chart-translate-ypos c 0)
-                           (chart-translate-xpos c 0)))
+                           (org-habit-stats-chart-translate-xpos c 0)))
                      (fc (if faces
                              (nth (% i (length faces)) faces)
                            'default))
