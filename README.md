@@ -1,5 +1,5 @@
-
 # org-habit-stats.el
+[![MELPA](https://melpa.org/packages/org-habit-stats-badge.svg)](https://melpa.org/#/org-habit-stats)
 
 View statistics, a calendar, and bar graphs of your habits in Emacs org-mode.
 
@@ -10,7 +10,8 @@ View statistics, a calendar, and bar graphs of your habits in Emacs org-mode.
 - Emacs 25.1
 
 # Installation
-This package is not yet available on (M)ELPA.
+This package is available on MELPA as `org-habit-stats`.
+Run `M-x package-refresh-contents` and `M-x package-install` and type in the package name to install it.
 
 ## Manual Installation
 Clone this repo to `~/.emacs.d/site-lisp/`.
@@ -21,7 +22,7 @@ Then add this to your config:
 
 ## Doom Emacs:
 ``` emacs-lisp
-(package! org-habit-stats :recipe (:host github :repo "ml729/org-habit-stats"))
+(package! org-habit-stats)
 ```
 
 # Usage
@@ -82,6 +83,16 @@ All three types of functions must have the same function signature:
 - `history` contains a list of pairs (date . completed) where date is represented as the number of days since December 31, 1 BC (as is used by many org-mode functions) and completed is 1 if the habit was completed that day, and 0 otherwise.
 - `history-rev` is the reverse of `history`.
 - `habit-data` is the result of running `org-habit-parse-todo` on a habit. From the docstring for `org-habit-parse-todo`:
+
+``` text
+Returns a list with the following elements:
+  0: Scheduled date for the habit (may be in the past)
+  1: \".+\"-style repeater for the schedule, in days
+  2: Optional deadline (nil if not present)
+  3: If deadline, the repeater for the deadline, otherwise nil
+  4: A list of all the past dates this todo was mark closed
+  5: Repeater type as a string
+```
 
 ### Adding statistics functions
 Statistics functions must return a number or string.
