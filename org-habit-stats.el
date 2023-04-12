@@ -440,10 +440,21 @@ are removed."
                              (/= 0 (mod (- (car x) most-recent-complete) repeat-len))))
                  (push x new-history)))))
           (t (error "Invalid repeat type %s" repeat-type)))))
-  (defun org-habit-stats--streak (h)
-    (if (and h (= (cdr (pop h)) 1))
-        (1+ (org-habit-stats--streak h))
-      0))
+
+
+;; (defun org-habit-stats--streak (h)
+;;   (if (and h (= (cdr (pop h)) 1))
+;;       (1+ (org-habit-stats--streak h))
+;;     0))
+
+(defun org-habit-stats--streak (h)
+"Helper function for `org-habit-stats-streak'.
+
+H must be new-to-old habit history."
+  (let ((streak 0))
+    (while (and h (= (cdr (pop h)) 1))
+      (setq streak (1+ streak)))
+    streak))
 
 (defun org-habit-stats-streak (_history history-rev _habit-data)
   "Return current streak of the habit.
@@ -463,13 +474,26 @@ HABIT-DATA is the result of running
 `org-habit-parse-todo' on a habit."
   (org-habit-stats--streak history-rev))
 
+;; (defun org-habit-stats--unstreak (h)
+;;   "Helper function for `org-habit-stats-unstreak'.
+
+;; H must be new-to-old habit history."
+;;   (if (and h (= (cdr (pop h)) 0))
+;;       (1+ (org-habit-stats--unstreak h))
+;;     0))
+
 (defun org-habit-stats--unstreak (h)
   "Helper function for `org-habit-stats-unstreak'.
 
 H must be new-to-old habit history."
-  (if (and h (= (cdr (pop h)) 0))
-      (1+ (org-habit-stats--unstreak h))
-    0))
+  (let ((unstreak 0))
+    (while (and h (= (cdr (pop h)) 0))
+      (setq unstreak (1+ unstreak)))
+    unstreak))
+
+
+
+
 (defun org-habit-stats-unstreak (_history history-rev _habit-data)
   "Return the current unstreak (number of consecutive days missed).
 If there is no history, returns 0.
